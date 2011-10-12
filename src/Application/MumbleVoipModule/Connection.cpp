@@ -580,7 +580,7 @@ namespace MumbleLib
         bool valid = data_stream.isValid();
         UNREFERENCED_PARAM(valid);
         uint8_t first_byte = static_cast<unsigned char>(data_stream.next());
-        ::MumbleClient::UdpMessageType::MessageType type = static_cast<::MumbleClient::UdpMessageType::MessageType>( ( first_byte >> 5) & 0x07 );
+        ::MumbleClient::UdpMessageType::MessageType type = static_cast< ::MumbleClient::UdpMessageType::MessageType>( ( first_byte >> 5) & 0x07 );
         uint8_t flags = first_byte & 0x1f;
         UNREFERENCED_PARAM(flags);
         switch (type)
