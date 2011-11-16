@@ -53,7 +53,7 @@ bool Server::Start(unsigned short port, const QString &protocol)
 {
     if (owner_->IsServer())
     {
-        LogDebug("Trying to start server but it's already running.");
+        LogDebug("[SERVER] Trying to start server but it's already running.");
         return true; // Already started, don't need to do anything.
     }
 
@@ -83,7 +83,7 @@ bool Server::Start(unsigned short port, const QString &protocol)
     }
 
     if (userSetProtocol != "udp" && userSetProtocol != "tcp")
-        ::LogWarning("Server::Start: Server config has an invalid server protocol '" + userSetProtocol + "'. Use tcp or udp. Resetting to default protocol.");
+        ::LogWarning("[SERVER] Server config has an invalid server protocol '" + userSetProtocol + "'. Use tcp or udp. Resetting to default protocol.");
     else
         transportLayer = userSetProtocol == "udp" ? kNet::SocketOverUDP : kNet::SocketOverTCP;
 
@@ -91,7 +91,7 @@ bool Server::Start(unsigned short port, const QString &protocol)
     // Start server
     if (!owner_->GetKristalliModule()->StartServer(port, transportLayer))
     {
-        ::LogError("Failed to start server in port " + ToString<int>(port));
+        ::LogError("[SERVER] Failed to start server in port " + ToString<int>(port));
         return false;
     }
 
@@ -102,15 +102,14 @@ bool Server::Start(unsigned short port, const QString &protocol)
     // Create the default server scene
     /// \todo Should be not hard coded like this. Give some unique id (uuid perhaps) that could be returned to the client to make the corresponding named scene in client?
     ScenePtr scene = framework_->Scene()->CreateScene("TundraServer", true, true);
-//    framework_->Scene()->SetDefaultScene(scene);
+    //framework_->Scene()->SetDefaultScene(scene);
     owner_->GetSyncManager()->RegisterToScene(scene);
 
     emit ServerStarted();
 
     KristalliProtocol::KristalliProtocolModule *kristalli = framework_->GetModule<KristalliProtocol::KristalliProtocolModule>();
     connect(kristalli, SIGNAL(NetworkMessageReceived(kNet::MessageConnection *, kNet::message_id_t, const char *, size_t)), 
-        this, SLOT(HandleKristalliMessage(kNet::MessageConnection*, kNet::message_id_t, const char*, size_t)), Qt::UniqueConnection);
-
+            this, SLOT(HandleKristalliMessage(kNet::MessageConnection*, kNet::message_id_t, const char*, size_t)), Qt::UniqueConnection);
     connect(kristalli, SIGNAL(ClientDisconnectedEvent(UserConnection *)), this, SLOT(HandleUserDisconnected(UserConnection *)), Qt::UniqueConnection);
 
     return true;
@@ -120,7 +119,7 @@ void Server::Stop()
 {
     if (owner_->IsServer())
     {
-        ::LogInfo("Stopped Tundra server. Removing TundraServer scene.");
+        ::LogInfo("[SERVER] Stopped Tundra server. Removing TundraServer scene.");
 
         owner_->GetKristalliModule()->StopServer();
         framework_->Scene()->RemoveScene("TundraServer");
@@ -260,7 +259,7 @@ void Server::HandleLogin(kNet::MessageConnection* source, const MsgLogin& msg)
     UserConnection* user = GetUserConnection(source);
     if (!user)
     {
-        ::LogWarning("Login message from unknown user");
+        ::LogWarning("[SERVER] Login message from unknown user");
         return;
     }
     
@@ -268,7 +267,7 @@ void Server::HandleLogin(kNet::MessageConnection* source, const MsgLogin& msg)
     QString loginData = QString::fromStdString(BufferToString(msg.loginData));
     bool success = xml.setContent(loginData);
     if (!success)
-        ::LogWarning("Received malformed xml logindata from user " + ToString<int>(user->userID));
+        ::LogWarning(QString("[SERVER] ID %1 client login data xml has malformed data").arg(user->userID));
     
     // Fill the user's logindata, both in raw format and as keyvalue pairs
     user->loginData = loginData;
@@ -276,16 +275,20 @@ void Server::HandleLogin(kNet::MessageConnection* source, const MsgLogin& msg)
     QDomElement keyvalueElem = rootElem.firstChildElement();
     while(!keyvalueElem.isNull())
     {
-        //::LogInfo("Logindata contains keyvalue pair " + keyvalueElem.tagName() + " = " + keyvalueElem.attribute("value);
         user->SetProperty(keyvalueElem.tagName(), keyvalueElem.attribute("value"));
         keyvalueElem = keyvalueElem.nextSiblingElement();
     }
+
+    QString connectedUsername = user->GetProperty("username");
     
     user->properties["authenticated"] = "true";
     emit UserAboutToConnect(user->userID, user);
     if (user->properties["authenticated"] != "true")
     {
-        ::LogInfo("User with connection ID " + ToString<int>(user->userID) + " was denied access");
+        if (connectedUsername.isEmpty())
+            ::LogInfo(QString("[SERVER] ID %1 client was denied access [%2] ").arg(user->userID).arg(user->connection->RemoteEndPoint().ToString().c_str()));
+        else
+            ::LogInfo(QString("[SERVER] ID %1 client '%2' was denied access [%3] ").arg(user->userID).arg(connectedUsername).arg(user->connection->RemoteEndPoint().ToString().c_str()));
         MsgLoginReply reply;
         reply.success = 0;
         reply.userID = 0;
@@ -295,9 +298,12 @@ void Server::HandleLogin(kNet::MessageConnection* source, const MsgLogin& msg)
         return;
     }
     
-    ::LogInfo("User with connection ID " + ToString<int>(user->userID) + " logged in");
+    if (connectedUsername.isEmpty())
+        ::LogInfo(QString("[SERVER] ID %1 client connected - %2 ").arg(user->userID).arg(user->connection->RemoteEndPoint().ToString().c_str()));
+    else
+        ::LogInfo(QString("[SERVER] ID %1 client '%2' connected [%3] ").arg(user->userID).arg(connectedUsername).arg(user->connection->RemoteEndPoint().ToString().c_str()));
     
-    // Allow entityactions & EC sync from now on
+    // Allow entity actions and EC sync from now on
     MsgLoginReply reply;
     reply.success = 1;
     reply.userID = user->userID;
@@ -347,6 +353,12 @@ void Server::HandleUserDisconnected(UserConnection* user)
     }
     
     emit UserDisconnected(user->userID, user);
+
+    QString username = user->GetProperty("username");
+    if (username.isEmpty())
+        ::LogInfo(QString("[SERVER] ID %1 client disconnected").arg(user->userID));
+    else
+        ::LogInfo(QString("[SERVER] ID %1 client '%2' disconnected").arg(user->userID).arg(username));
 }
 
 template<typename T>
