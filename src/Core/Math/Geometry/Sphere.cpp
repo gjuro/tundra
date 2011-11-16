@@ -669,7 +669,7 @@ float3 Sphere::RandomPointOnSurface(LCG &lcg)
 		float z = lcg.Float(-r, r);
 		float lenSq = x*x + y*y + z*z;
 		if (lenSq >= 1e-6f && lenSq <= r*r)
-			return pos + r / sqrt(lenSq) * float3(x,y,z);
+			return pos + float3(x,y,z).operator*(r / sqrt(lenSq));
 	}
 	assume(false && "Sphere::RandomPointOnSurface failed!");
 

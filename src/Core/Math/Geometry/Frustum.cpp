@@ -71,7 +71,7 @@ Plane Frustum::RightPlane() const
 
 Plane Frustum::TopPlane() const
 {
-	float3 topSide = front + tan(verticalFov * 0.5f) * up;
+	float3 topSide = front + up.operator*(tan(verticalFov * 0.5f));
 	float3 right = Cross(front, up);
 	float3 topSideNormal = Cross(right, topSide).Normalized();
 	return Plane(pos, topSideNormal);
@@ -79,7 +79,7 @@ Plane Frustum::TopPlane() const
 
 Plane Frustum::BottomPlane() const
 {
-	float3 bottomSide = front - tan(verticalFov * 0.5f) * up;
+	float3 bottomSide = front - up.operator*(tan(verticalFov * 0.5f));
 	float3 left = Cross(up, front);
 	float3 bottomSideNormal = Cross(left, bottomSide).Normalized();
 	return Plane(pos, bottomSideNormal);
