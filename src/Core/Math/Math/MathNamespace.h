@@ -3,7 +3,7 @@
 /// Adjust this #define to choose the name of the namespace math is given to.
 #define MATH_NAMESPACE_NAME math
 
-#define MATH_ENABLE_NAMESPACE
+//#define MATH_ENABLE_NAMESPACE
 
 #ifdef MATH_ENABLE_NAMESPACE
 
@@ -23,6 +23,17 @@
 #define MATH_NS
 
 #define USE_MATH_NAMESPACE
+
+#ifdef WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef Polygon
+#define Polygon Polygon_WinGdi_UNUSED
+#endif
+#include <Windows.h> // For DebugBreak();
+#undef Polygon
+#endif
 
 #endif
 
