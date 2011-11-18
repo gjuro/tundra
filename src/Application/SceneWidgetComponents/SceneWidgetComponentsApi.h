@@ -11,4 +11,3 @@
 #else
 #define SCENEWIDGET_MODULE_API
 #endif
-
