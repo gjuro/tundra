@@ -1,12 +1,12 @@
 // For conditions of distribution and use, see copyright notice in license.txt
 
-#ifndef incl_SceneWidgetComponents_EC_WidgetCanvas_h
-#define incl_SceneWidgetComponents_EC_WidgetCanvas_h
+#pragma once
 
 #include "SceneWidgetComponentsApi.h"
 #include "IComponent.h"
 #include "IAttribute.h"
 #include "OgreModuleFwd.h"
+#include "Math/MathFwd.h"
 
 #include <QMap>
 #include <QImage>
@@ -117,5 +117,3 @@ private:
     QImage buffer_;
     bool mesh_hooked_;
 };
-
-#endif

@@ -48,7 +48,7 @@ if (SHOULD_RUN)
 
     SetupCompileFlags()
 
-    link_modules (Framework Asset Ui OgreRenderingModule SceneWidgetComponents)
+    link_modules (Framework Math Asset Ui OgreRenderingModule SceneWidgetComponents)
     link_package (VLC)
 
     final_target ()

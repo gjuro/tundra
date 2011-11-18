@@ -365,7 +365,7 @@ void EC_WidgetCanvas::Update()
 
 bool EC_WidgetCanvas::Blit(const QImage &source, Ogre::TexturePtr destination)
 {
-#ifdef DIRECTX_ENABLED && defined(WIN32)
+#if defined(DIRECTX_ENABLED) && defined(WIN32)
     Ogre::HardwarePixelBufferSharedPtr pb = destination->getBuffer();
     Ogre::D3D9HardwarePixelBuffer *pixelBuffer = dynamic_cast<Ogre::D3D9HardwarePixelBuffer*>(pb.get());
     if (!pixelBuffer)
@@ -390,9 +390,11 @@ bool EC_WidgetCanvas::Blit(const QImage &source, Ogre::TexturePtr destination)
                     for(size_t y = 0; y < source.height(); ++y)
                         memcpy((u8*)lock.pBits + lock.Pitch * y, source.bits() + sourceStride * y, sourceStride);
                 surface->UnlockRect();
+                return true;
             }
         }
     }
+    return false;
 #else
     if (!destination->getBuffer().isNull())
     {
