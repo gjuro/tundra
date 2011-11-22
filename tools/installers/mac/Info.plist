@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>applet</string>
+	<key>CFBundleVersion</key>
+	<string>2.1.3.2</string>
+	<key>CFBundleName</key>
+	<string>Tundra</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<false/>
+	<key>SUFeedUrl</key>
+	<string>http://adminotech.data.s3.amazonaws.com/clients/tundra2/appcast.xml</string>
+	<key>SUPublicDSAKeyFile</key>
+	<string>dsa_pub.pem</string>
+	<key>CFBundleIconFile</key>
+	<string>Icon.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.adminotech.Tundra</string>
+	<key>CFBundleSignature</key>
+	<string>tndr</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Tundra protocol handler</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tundra</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
