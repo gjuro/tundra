@@ -37,7 +37,7 @@
 
   <option name="--accept_unknown_http_sources" />
   <option name="--accept_unknown_local_sources" />
-  <option name="--fpslimit" value="60" />
+  <option name="--fpslimit" value="30" />
   <option name="--hide_benign_ogre_messages" />
   <option name="--nofilewatcher" />
 </Tundra>
