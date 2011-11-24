@@ -1,7 +1,7 @@
 // For conditions of distribution and use, see copyright notice in license.txt
 
 #include "StableHeaders.h"
-#include "DebugOperatorNew.h"
+//#include "DebugOperatorNew.h"
 
 #include "Application.h"
 #include "HttpAssetProvider.h"
@@ -20,7 +20,7 @@
 
 #include <boost/date_time/local_time/local_time.hpp>
 
-#include "MemoryLeakCheck.h"
+//#include "MemoryLeakCheck.h"
 
 HttpAssetProvider::HttpAssetProvider(Framework *framework_) :
     framework(framework_),
