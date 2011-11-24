@@ -1,7 +1,7 @@
 // For conditions of distribution and use, see copyright notice in license.txt
 
 #include "StableHeaders.h"
-//#include "DebugOperatorNew.h"
+#include "DebugOperatorNew.h"
 
 #include "Application.h"
 #include "HttpAssetProvider.h"
@@ -20,7 +20,7 @@
 
 #include <boost/date_time/local_time/local_time.hpp>
 
-//#include "MemoryLeakCheck.h"
+#include "MemoryLeakCheck.h"
 
 HttpAssetProvider::HttpAssetProvider(Framework *framework_) :
     framework(framework_),
@@ -99,7 +99,10 @@ QDateTime HttpAssetProvider::FromHttpDate(const QByteArray &value)
     try
     {
         using namespace boost::local_time;
+
+#include "DisableMemoryLeakCheck.h"
         local_time_input_facet *timeFacet(new local_time_input_facet(timeFacetFormat));
+#include "EnableMemoryLeakCheck.h"
 
         // This is not a memory leak. 'timeFacet' is destoryed by the std::local object, from a c++ reference guide:
         // "The locale object takes over responsibility of deleting this facet object."
