@@ -136,3 +136,5 @@ endif ()
 if (ENABLE_OPEN_ASSET_IMPORT)
     AddProject(Application OpenAssetImport)         # Allows import of various mesh file formats
 endif ()
+
+AddProject(Application AssetInterestPlugin)
