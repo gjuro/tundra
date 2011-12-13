@@ -267,6 +267,10 @@ echo "### Prepare Tundra ###"
 cp -R $TUNDRA_PWD/bin/* $tundrabundle/Contents/MacOS
 cp $LPATH/libogg.0.dylib $LPATH/libcelt0.2.dylib $LPATH/libmumbleclient.dylib $LPATH/libprotobuf.7.dylib $tundrabundle/Contents/lib
 cp $QTPROPERTYBROWSER_LPATH/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib
+ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.dylib
+ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.dylib
+ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.dylib
+
 
 echo "### Cleaning up ###"
 
@@ -338,6 +342,14 @@ install_name_tool -id @executable_path/../lib/libogg.0.dylib $tundrabundle/Conte
 #install_name_tool -change $LPATH/libogg.0.dylib @executable_path/../lib/libogg.0.dylib $tundrabundle/Contents/lib/libvorbis.0.dylib
 
 echo "### Changing Tundra modules install information ###"
+
+echo "--- AssetInterestPlugin.dylib ---"
+install_name_tool -id @executable_path/plugins/AssetInterestPlugin.dylib $tundrabundle/Contents/MacOS/plugins/AssetInterestPlugin.dylib
+
+install_name_tool -change $TUNDRA_PWD/bin/plugins/TundraProtocolModule.dylib @executable_path/plugins/TundraProtocolModule.dylib $tundrabundle/Contents/MacOS/plugins/AssetInterestPlugin.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/PhysicsModule.dylib @executable_path/plugins/PhysicsModule.dylib $tundrabundle/Contents/MacOS/plugins/AssetInterestPlugin.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/EnvironmentModule.dylib @executable_path/plugins/EnvironmentModule.dylib $tundrabundle/Contents/MacOS/plugins/AssetInterestPlugin.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/OgreRenderingModule.dylib @executable_path/plugins/OgreRenderingModule.dylib $tundrabundle/Contents/MacOS/plugins/AssetInterestPlugin.dylib
 
 echo "--- AssetModule.dylib ---"
 install_name_tool -id @executable_path/plugins/AssetModule.dylib $tundrabundle/Contents/MacOS/plugins/AssetModule.dylib
