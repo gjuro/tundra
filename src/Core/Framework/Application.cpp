@@ -587,11 +587,11 @@ void Application::AboutToExit()
         quit();
 }
 
-QString& Application::Platform()
+QString Application::Platform()
 {
 #ifdef Q_WS_WIN
     return QString("win");
-#elif Q_WS_MAC
+#elif defined(Q_WS_MAC)
     return QString("mac");
 #elif Q_WS_X11
     return QString("x11");
