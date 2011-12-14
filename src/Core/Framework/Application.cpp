@@ -47,7 +47,7 @@
 /// @note Modify these values when you are making a custom Tundra build. Also the version needs to be changed here on releases.
 const char *Application::organizationName = "Adminotech";
 const char *Application::applicationName = "Tundra";
-const char *Application::version = "2.1.3.5";
+const char *Application::version = "2.1.3.6";
 
 Application::Application(Framework *owner, int &argc, char **argv) :
     QApplication(argc, argv),
@@ -585,4 +585,16 @@ void Application::AboutToExit()
     // If no-one canceled the exit as a response to the signal, exit
     if (framework->IsExiting())
         quit();
+}
+
+QString& Application::Platform()
+{
+#ifdef Q_WS_WIN
+    return QString("win");
+#elif Q_WS_MAC
+    return QString("mac");
+#elif Q_WS_X11
+    return QString("x11");
+#endif
+    return QString();
 }

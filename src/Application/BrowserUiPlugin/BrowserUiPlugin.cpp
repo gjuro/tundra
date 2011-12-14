@@ -2,6 +2,7 @@
 
 #include "Framework.h"
 #include "CoreDefines.h"
+#include "Application.h"
 #include "LoggingFunctions.h"
 
 #include "BrowserUiPlugin.h"
@@ -9,25 +10,61 @@
 
 #include "JavascriptModule.h"
 #include "ScriptMetaTypeDefines.h"
+
 #include <QScriptEngine>
+#include <QNetworkDiskCache>
 
 #include "QScriptEngineHelpers.h"
 
 Q_DECLARE_METATYPE(CookieJar*);
 
-BrowserUiPlugin::BrowserUiPlugin(Framework *framework) :
-    QObject(0),
-    framework_(framework)
+BrowserUiPlugin::BrowserUiPlugin() :
+    IModule("BrowserUiPlugin"),
+    reserverCookieFile_("cookies.data"),
+    mainCookieJar_(0),
+    mainDiskCache_(0)
+{
+}
+
+BrowserUiPlugin::~BrowserUiPlugin()
+{
+    // Don't delete mainCookieJar_ or mainDiskCache_, 
+    // QObject parenting will perform the cleanup.
+}
+
+void BrowserUiPlugin::Load()
+{
+    // For headless instances we don't init or
+    // expose our mainly UI related functionality.
+    if (framework_->IsHeadless())
+        return;
+
+    // Determine the data dir
+    QString subdir = "browsercache";
+    QDir appData(Application::UserDataDirectory());
+    if (!appData.exists(subdir))
+        appData.mkdir(subdir);
+    appData.cd(subdir);
+    dataDir_ = appData.absolutePath();
+
+    // Create main cookie file.
+    reservedCookiePath_ = appData.absoluteFilePath(reserverCookieFile_);
+    mainCookieJar_ = new CookieJar(this, reservedCookiePath_);
+
+    // Create main disk cache.
+    mainDiskCache_ = new QNetworkDiskCache(this);
+    mainDiskCache_->setCacheDirectory(dataDir_);
+
+    framework_->RegisterDynamicObject("browserplugin", this);
+}
+
+void BrowserUiPlugin::Initialize()
 {
     JavascriptModule *jsModule = framework_->GetModule<JavascriptModule>();
     if (jsModule)
         connect(jsModule, SIGNAL(ScriptEngineCreated(QScriptEngine*)), SLOT(OnScriptEngineCreated(QScriptEngine*)));
     else
         LogWarning("BrowserUiPlugin: Could not get JavascriptModule to connect to the engine created signal!");
-}
-
-BrowserUiPlugin::~BrowserUiPlugin()
-{
 }
 
 void BrowserUiPlugin::OnScriptEngineCreated(QScriptEngine *engine)
@@ -50,9 +87,71 @@ void BrowserUiPlugin::OpenUrl(const QUrl &url, bool activateNewTab)
     emit OpenUrlRequest(url, activateNewTab);
 }
 
+CookieJar *BrowserUiPlugin::MainCookieJar()
+{
+    return mainCookieJar_;
+}
+
+QNetworkDiskCache *BrowserUiPlugin::MainDiskCache()
+{
+    return mainDiskCache_;
+}
+
 CookieJar *BrowserUiPlugin::CreateCookieJar(const QString &cookieDiskFile)
 {
+    // If has the same filename as preserved path, look into it more
+    if (cookieDiskFile.endsWith(reserverCookieFile_, Qt::CaseInsensitive))
+    {
+        QFileInfo inInfo(cookieDiskFile);
+        QFileInfo reserverInfo(reservedCookiePath_);
+        if (inInfo.absoluteFilePath().toLower() == reserverInfo.absoluteFilePath().toLower())
+        {
+            LogWarning("BrowserUiPlugin::CreateCookieJar: Tried to re-create main cookie jar, returning existing jar. Use BrowserUiPlugin::MainCookieJar() instead!");
+            return MainCookieJar();
+        }
+    }
     return new CookieJar(this, cookieDiskFile);
+}
+
+void BrowserUiPlugin::ShowProgressScreen(QString message)
+{
+    emit ShowProgressScreenRequest(message);
+}
+
+void BrowserUiPlugin::HideProgressScreen()
+{
+    emit HideProgressScreenRequest();
+}
+
+void BrowserUiPlugin::UpdateProgressScreen(QString message, int progress)
+{
+    emit UpdateProgressScreenRequest(message, progress);
+}
+
+void BrowserUiPlugin::UpdateProgressScreenImage(QString absoluteFilePath)
+{
+    if (absoluteFilePath.isEmpty())
+    {
+        QImage img(300, 100, QImage::Format_ARGB32_Premultiplied);
+        img.fill(Qt::transparent);
+        emit UpdateProgressImageRequest(img);
+    }
+    else if (QFile::exists(absoluteFilePath))
+    {
+        QImage img(absoluteFilePath);
+        if (!img.isNull())
+        {
+            if (img.width() > 300)
+                img = img.scaledToWidth(300);
+            if (img.height() > 100)
+                img = img.scaledToHeight(100);
+            emit UpdateProgressImageRequest(img);
+        }
+        else
+            LogWarning("BrowserUiPlugin::SetProgressScreenImage: Failed to open image '" + absoluteFilePath + "'");
+    }
+    else
+        LogWarning("BrowserUiPlugin::SetProgressScreenImage: Given file does not exist '" + absoluteFilePath + "'");
 }
 
 extern "C"
@@ -60,7 +159,7 @@ extern "C"
     DLLEXPORT void TundraPluginMain(Framework *fw)
     {
         Framework::SetInstance(fw); // Inside this DLL, remember the pointer to the global framework object.
-        BrowserUiPlugin *plugin = new BrowserUiPlugin(fw);
-        fw->RegisterDynamicObject("browserplugin", plugin);
+        IModule *module = new BrowserUiPlugin();
+        fw->RegisterModule(module);
     }
 }
