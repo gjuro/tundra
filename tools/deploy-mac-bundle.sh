@@ -267,10 +267,6 @@ echo "### Prepare Tundra ###"
 cp -R $TUNDRA_PWD/bin/* $tundrabundle/Contents/MacOS
 cp $LPATH/libogg.0.dylib $LPATH/libcelt0.2.dylib $LPATH/libmumbleclient.dylib $LPATH/libprotobuf.7.dylib $tundrabundle/Contents/lib
 cp $QTPROPERTYBROWSER_LPATH/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib
-ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.dylib
-ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.dylib
-ln -s $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.0.dylib $tundrabundle/Contents/lib/libQtSolutions_PropertyBrowser-head.1.0.dylib
-
 
 echo "### Cleaning up ###"
 
@@ -413,7 +409,7 @@ install_name_tool -change $TUNDRA_PWD/bin/plugins/EnvironmentModule.dylib @execu
 echo "--- MumbleVoipModule.dylib ---"
 install_name_tool -id @executable_path/plugins/MumbleVoipModule.dylib $tundrabundle/Contents/MacOS/plugins/MumbleVoipModule.dylib
 
-install_name_tool -change /Users/tommi/workspace/COCOA_BUILD/libmumbleclient/libmumbleclient.dylib @executable_path/../lib/libmumbleclient.dylib $tundrabundle/Contents/MacOS/plugins/MumbleVoipModule.dylib
+install_name_tool -change /Users/cvetan/workspace/COCOA_BUILD/deps/build/mumbleclient/libmumbleclient.dylib @executable_path/../lib/libmumbleclient.dylib $tundrabundle/Contents/MacOS/plugins/MumbleVoipModule.dylib
 install_name_tool -change $LPATH/libcelt0.2.dylib @executable_path/../lib/libcelt0.2.dylib $tundrabundle/Contents/MacOS/plugins/MumbleVoipModule.dylib
 install_name_tool -change $LPATH/libprotobuf.7.dylib @executable_path/../lib/libprotobuf.7.dylib $tundrabundle/Contents/MacOS/plugins/MumbleVoipModule.dylib
 
@@ -455,6 +451,8 @@ install_name_tool -change $TUNDRA_PWD/bin/plugins/TundraProtocolModule.dylib @ex
 install_name_tool -change $TUNDRA_PWD/bin/plugins/OgreRenderingModule.dylib @executable_path/plugins/OgreRenderingModule.dylib $tundrabundle/Contents/MacOS/plugins/SceneWidgetComponents.dylib
 install_name_tool -change $TUNDRA_PWD/bin/plugins/EnvironmentModule.dylib @executable_path/plugins/EnvironmentModule.dylib $tundrabundle/Contents/MacOS/plugins/SceneWidgetComponents.dylib
 install_name_tool -change $TUNDRA_PWD/bin/plugins/PhysicsModule.dylib @executable_path/plugins/PhysicsModule.dylib $tundrabundle/Contents/MacOS/plugins/SceneWidgetComponents.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/BrowserUiPlugin.dylib @executable_path/plugins/BrowserUiPlugin.dylib $tundrabundle/Contents/MacOS/plugins/SceneWidgetComponents.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/JavascriptModule.dylib @executable_path/plugins/JavascriptModule.dylib $tundrabundle/Contents/MacOS/plugins/SceneWidgetComponents.dylib
 
 echo "--- SkyXHydrax.dylib ---"
 install_name_tool -id @executable_path/plugins/SkyXHydrax.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
@@ -481,6 +479,8 @@ install_name_tool -change $TUNDRA_PWD/bin/plugins/OgreRenderingModule.dylib @exe
 install_name_tool -change $TUNDRA_PWD/bin/plugins/TundraProtocolModule.dylib @executable_path/plugins/TundraProtocolModule.dylib $tundrabundle/Contents/MacOS/plugins/VlcPlugin.dylib
 install_name_tool -change $TUNDRA_PWD/bin/plugins/PhysicsModule.dylib @executable_path/plugins/PhysicsModule.dylib $tundrabundle/Contents/MacOS/plugins/VlcPlugin.dylib
 install_name_tool -change $TUNDRA_PWD/bin/plugins/SceneWidgetComponents.dylib @executable_path/plugins/SceneWidgetComponents.dylib $tundrabundle/Contents/MacOS/plugins/VlcPlugin.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/BrowserUiPlugin.dylib @executable_path/plugins/BrowserUiPlugin.dylib $tundrabundle/Contents/MacOS/plugins/VlcPlugin.dylib
+install_name_tool -change $TUNDRA_PWD/bin/plugins/JavascriptModule.dylib @executable_path/plugins/JavascriptModule.dylib $tundrabundle/Contents/MacOS/plugins/VlcPlugin.dylib
 
 echo "--- UpdateModule.dylib ---"
 install_name_tool -id @executable_path/plugins/UpdateModule.dylib $tundrabundle/Contents/MacOS/plugins/UpdateModule.dylib
