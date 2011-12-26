@@ -35,6 +35,9 @@
 #endif
 
 #if defined(_WINDOWS)
+#if defined(_WINSOCKAPI_)
+#undef _WINSOCKAPI_ 
+#endif
 #include <WinSock2.h>
 #include <windows.h>
 #include <shlobj.h>
@@ -47,7 +50,7 @@
 /// @note Modify these values when you are making a custom Tundra build. Also the version needs to be changed here on releases.
 const char *Application::organizationName = "Adminotech";
 const char *Application::applicationName = "Tundra";
-const char *Application::version = "2.1.3.6";
+const char *Application::version = "2.1.3.7";
 
 Application::Application(Framework *owner, int &argc, char **argv) :
     QApplication(argc, argv),
@@ -593,8 +596,9 @@ QString Application::Platform()
     return QString("win");
 #elif defined(Q_WS_MAC)
     return QString("mac");
-#elif Q_WS_X11
+#elif defined(Q_WS_X11)
     return QString("x11");
-#endif
+#else
     return QString();
+#endif
 }

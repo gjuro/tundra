@@ -3,6 +3,7 @@
 #include "StableHeaders.h"
 #include "DebugOperatorNew.h"
 #include "EC_WebView.h"
+#include "SceneWidgetComponents.h"
 
 #include "IModule.h"
 #include "SceneAPI.h"
@@ -43,7 +44,6 @@
 #endif
 
 #include "LoggingFunctions.h"
-
 #include "MemoryLeakCheck.h"
 
 static int NoneControlID = -1;
@@ -124,19 +124,12 @@ EC_WebView::EC_WebView(Scene *scene) :
         connect(sceneInteract, SIGNAL(EntityClicked(Entity*, Qt::MouseButton, RaycastResult*)), 
                 SLOT(EntityClicked(Entity*, Qt::MouseButton, RaycastResult*)));
     }
-
-    PrepareWebview();
 }
 
 EC_WebView::~EC_WebView()
 {
     disconnect();
-    ResetWidget();
-}
-
-bool EC_WebView::IsSerializable() const
-{
-    return true;
+    ResetWebView(true);
 }
 
 bool EC_WebView::eventFilter(QObject *obj, QEvent *e)
@@ -189,7 +182,7 @@ void EC_WebView::ServerInitialize(TundraLogic::Server *server)
 {
     if (!server || !server->IsRunning())
         return;
-    connect(server, SIGNAL(UserDisconnected(int, UserConnection*)), SLOT(ServerHandleDisconnect(int, UserConnection*)));
+    connect(server, SIGNAL(UserDisconnected(int, UserConnection*)), SLOT(ServerHandleDisconnect(int, UserConnection*)), Qt::UniqueConnection);
     connect(this, SIGNAL(AttributeChanged(IAttribute*, AttributeChange::Type)), SLOT(ServerHandleAttributeChange(IAttribute*, AttributeChange::Type)), Qt::UniqueConnection);
 }
 
@@ -237,6 +230,62 @@ void EC_WebView::ServerCheckControllerValidity(int connectionID)
     }
 }
 
+// Protected
+
+void EC_WebView::Render(QImage image)
+{
+    // Don't do anything if rendering is not enabled
+    if (!ViewEnabled() || GetFramework()->IsHeadless())
+        return;
+
+    // If not enabled don't render
+    if (!getenabled())
+        return;
+    if (!componentPrepared_)
+        return;
+
+    // We may have switched to the local mode in the meanwhile
+    if (getcontrollerId() != NoneControlID || getrenderRefreshRate() > 0)
+        return;
+    if (webview_ && webview_->isVisible())
+    {
+        RenderDelayed();
+        return;
+    }
+
+    // Get needed components, something is fatally wrong if these are not present but componentPrepared_ is true.
+    EC_Mesh *mesh = GetMeshComponent();
+    EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
+    if (!mesh || !sceneCanvas)
+    {
+        // In the case someone destroyed EC_WidgetCanvas or EC_Mesh from our entity
+        // lets stop our running timer (if its running), so we don't unnecessarily poll here.
+        RenderTimerStop();
+        componentPrepared_ = false;
+        return;
+    }
+
+    // Validate submesh index from EC_Mesh
+    uint submeshIndex = (uint)getrenderSubmeshIndex();
+    if (submeshIndex >= mesh->GetNumSubMeshes())
+    {
+        /// \note ResetSubmeshIndex() is called with a small delay here, or the ec editor UI wont react to it. Resetting the index back to 0 will call Render() again.
+        LogWarning("Render submesh index " + QString::number(submeshIndex).toStdString() + " is illegal, restoring default value.");
+        QTimer::singleShot(1, this, SLOT(ResetSubmeshIndex()));
+        return;
+    }
+
+    // Set submesh to EC_WidgetCanvas if different from current
+    if (!sceneCanvas->GetSubMeshes().contains(submeshIndex))
+        sceneCanvas->SetSubmesh(submeshIndex);
+
+    // Reset widget ptr as we are now using direct image updates
+    if (sceneCanvas->GetWidget() != 0)
+        sceneCanvas->SetWidget(0);
+
+    sceneCanvas->Update(image);   
+}
+
 // Public slots
 
 void EC_WebView::Render()
@@ -249,12 +298,16 @@ void EC_WebView::Render()
     if (!getenabled())
         return;
 
-    // Comprehensive checks that everything is ok before rendering anything.
     if (!webview_)
     {
-        LogError("Render: Webview object is null, aborting render call.");
+        // Redirect to the rendering queue
+        if (getrenderRefreshRate() == 0 && getcontrollerId() == NoneControlID)
+            LoadUrl(getwebviewUrl().simplified());
+        else
+            LogWarning("EC_WebView::Render: Webview is null, aborting!");
         return;
     }
+
     if (!componentPrepared_)
         return;
     if (webviewLoading_)
@@ -339,6 +392,8 @@ void EC_WebView::RenderDelayed()
 {
     if (!componentPrepared_)
         return;
+    if (!getenabled())
+        return;
 
     // If timer does not exist or is not active, 
     // invoke a single shot to our Render() function.
@@ -358,43 +413,12 @@ void EC_WebView::RenderWindowResized()
     if (!resizeRenderTimer_)
         return;
 
+#if defined(DIRECTX_ENABLED) && defined(WIN32)
+    // Rendering goes black on the texture when 
+    // windows is resized only on directx
     if (!resizeRenderTimer_->isActive())
         resizeRenderTimer_->start(500);
-}
-
-void EC_WebView::ResetWidget()
-{
-    RenderTimerStop();
-
-    if (webview_)
-    {
-        // Reset the EC_WidgetCanvas data for added safety. Restore original materials.
-        // If we come here from dtor this wont happen as parent entity has been reseted.
-        EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
-        if (sceneCanvas)
-        {
-            if (sceneCanvas->GetWidget() == webview_)
-            {
-                sceneCanvas->RestoreOriginalMeshMaterials();
-                sceneCanvas->SetWidget(0);
-            }
-        }
-
-        // Disconnect existing widgets signal connections, 
-        // stop its networking, 
-        // mark it for Qt cleanup and
-        // reset our internal ptr.
-        webview_->disconnect();
-        if (webviewLoading_)
-        {
-            webview_->stop();
-            webviewLoading_ = false;
-        }
-        delete webview_.data();
-        webview_ = 0;
-    }
-
-    webviewHasContent_ = false;
+#endif
 }
 
 void EC_WebView::PrepareComponent()
@@ -402,17 +426,8 @@ void EC_WebView::PrepareComponent()
     // Don't do anything if rendering is not enabled
     if (!ViewEnabled() || GetFramework()->IsHeadless())
         return;
-
-    // Some security checks
     if (componentPrepared_)
-    {
         LogWarning("PrepareComponent: Preparations seem to be done already, you might not want to do this multiple times.");
-    }
-    if (!webview_)
-    {
-        LogError("PrepareComponent: Cannot start preparing, webview object is null. This should never happen!");
-        return;
-    }
 
     // Get parent and connect to the component removed signal.
     Entity *parent = ParentEntity();
@@ -469,21 +484,15 @@ void EC_WebView::PrepareComponent()
     if (!getenabled())
         sceneCanvas->RestoreOriginalMeshMaterials();
 
-    // Resize the widget if needed before loading the page.
-    QSize targetSize = QSize(getwebviewSize().x(), getwebviewSize().y());
-    if (webview_->size() != targetSize)
-        webview_->setFixedSize(targetSize);
-
-    // Validate and load the 'getwebviewUrl' page to our QWebView if it's not empty.
-    QString urlString = getwebviewUrl().simplified();
-    if (urlString.isEmpty())
+    if (webview_)
     {
-        // Stop timers if running
-        RenderTimerStop();
-        return;
+        // Resize the widget if needed before loading the page.
+        QSize targetSize = QSize(getwebviewSize().x(), getwebviewSize().y());
+        if (webview_->size() != targetSize)
+            webview_->setFixedSize(targetSize);
     }
 
-    LoadUrl(urlString);
+    LoadUrl(getwebviewUrl().simplified());
 }
 
 void EC_WebView::PrepareWebview()
@@ -491,8 +500,11 @@ void EC_WebView::PrepareWebview()
     // Don't do anything if rendering is not enabled
     if (!ViewEnabled() || GetFramework()->IsHeadless())
         return;
+    if (webview_)
+        return;
 
-    ResetWidget();
+    webviewLoading_ = false;
+    webviewHasContent_ = false;
 
     // Do not set our main window as the parent so we can our selves delete
     // the widget on dtor. This will result in the Qt::Tool window going behind the main win
@@ -507,12 +519,11 @@ void EC_WebView::PrepareWebview()
     connect(webview_, SIGNAL(linkClicked(const QUrl&)), this, SLOT(LoadRequested(const QUrl&)), Qt::UniqueConnection);
     connect(webview_, SIGNAL(loadStarted()), this, SLOT(LoadStarted()), Qt::UniqueConnection);
     connect(webview_, SIGNAL(loadFinished(bool)), this, SLOT(LoadFinished(bool)), Qt::UniqueConnection);
-    connect(webview_, SIGNAL(loadFinished(bool)), this, SLOT(LoadFinished(bool)), Qt::UniqueConnection);
 
+    /// @todo Use shared access manager from SceneWidgetComponent module?
     QNetworkAccessManager *networkAccess = webview_->page()->networkAccessManager();
     if (networkAccess)
     {
-        
         connect(networkAccess, SIGNAL(sslErrors(QNetworkReply*, const QList<QSslError>&)), 
             this, SLOT(OnSslErrors(QNetworkReply*, const QList<QSslError>&)), Qt::UniqueConnection);
 
@@ -522,10 +533,59 @@ void EC_WebView::PrepareWebview()
         {
             // Shared disk cache and cookies for all browsers
             networkAccess->setCache(browserPlugin->MainDiskCache());
+            if (networkAccess->cache()) networkAccess->cache()->setParent(0);
             networkAccess->setCookieJar(browserPlugin->MainCookieJar());
+            if (networkAccess->cookieJar()) networkAccess->cookieJar()->setParent(0);
         }
 #endif
     }
+
+    // Load current url
+    LoadUrl(getwebviewUrl().simplified());
+}
+
+void EC_WebView::ResetWebView(bool ignoreVisibility)
+{
+    if (webview_)
+    {
+        if (!ignoreVisibility && webview_->isVisible())
+            return;
+
+        // Reset the EC_WidgetCanvas data for added safety. Restore original materials.
+        // If we come here from dtor this wont happen as parent entity has been reseted.
+        EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
+        if (sceneCanvas)
+        {
+            if (sceneCanvas->GetWidget() == webview_)
+            {
+                sceneCanvas->RestoreOriginalMeshMaterials();
+                sceneCanvas->SetWidget(0);
+            }
+        }
+
+        // Reset parent of shard cache and cookie jar.
+        QNetworkAccessManager *networkManager =  webview_->page() != 0 ? webview_->page()->networkAccessManager() : 0;
+        if (networkManager)
+        {
+            if (networkManager->cache()) networkManager->cache()->setParent(0);
+            if (networkManager->cookieJar()) networkManager->cookieJar()->setParent(0);
+        }
+
+        // Disconnect existing widgets signal connections, 
+        // stop its networking, 
+        // mark it for Qt cleanup and
+        // reset our internal ptr.
+        webview_->disconnect();
+        if (webviewLoading_)
+        {
+            webview_->stop();
+            webviewLoading_ = false;
+        }
+        SAFE_DELETE(webview_)
+    }
+
+    RenderTimerStop();
+    webviewHasContent_ = false;
 }
 
 void EC_WebView::OnSslErrors(QNetworkReply *reply, const QList<QSslError>& errors)
@@ -555,7 +615,21 @@ void EC_WebView::LoadRequested(const QUrl &url)
 
 void EC_WebView::LoadUrl(QString urlString)
 {
-    if (!componentPrepared_ || !webview_)
+    if (!componentPrepared_)
+        return;
+
+    if (urlString.isEmpty())
+    {
+        RenderTimerStop();
+
+        // Restore the original materials from the mesh if user sets url to empty string.
+        EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
+        if (sceneCanvas)
+            sceneCanvas->RestoreOriginalMeshMaterials();
+        return;
+    }
+
+    if (!getenabled())
         return;
 
     // Add http in front or strict mode parsing will fail.
@@ -566,12 +640,35 @@ void EC_WebView::LoadUrl(QString urlString)
     QUrl url = QUrl::fromPercentEncoding(urlString.toAscii());
     if (url.isValid())
     {
-        if (webviewLoading_)
-            webview_->stop();
-        if (webview_->url() != url)
-            webview_->load(url);
+        // Someone is controlling the browsing or frequent 
+        // updates are needed, instantiate and use a local QWebView.
+        if (getrenderRefreshRate() > 0 || getcontrollerId() != NoneControlID)
+        {
+            if (!webview_)
+                PrepareWebview();
+        }
         else
-            RenderDelayed();
+        {
+            ResetWebView();
+
+            // Above won't reset widget if its visible, then we use local instance
+            if (!webview_)
+            {
+                SceneWidgetComponents *sceneComponentsPlugin = GetFramework()->GetModule<SceneWidgetComponents>();
+                if (sceneComponentsPlugin)
+                    sceneComponentsPlugin->WebRenderingRequest(this, url, QSize(getwebviewSize().x(), getwebviewSize().y()));
+                else
+                    LogError("EC_WebView: Failed to get SceneWidgetComponents module!");
+            }
+        }
+
+        if (webview_)
+        {
+            if (webview_->url() != url)
+                webview_->load(url);
+            else
+                RenderDelayed();
+        }
     }
     else
         LogError("EC_WebView: Invalid url '" + url.toString() + "'. Did you remember to input the percent encoded form of the url?");
@@ -580,7 +677,23 @@ void EC_WebView::LoadUrl(QString urlString)
 void EC_WebView::LoadStarted()
 {
     RenderTimerStop();
+    if (!webview_)
+        return;
+
     webviewLoading_ = true;
+
+    QString loadedUrl = getwebviewUrl().simplified();
+    QString title;
+    if (getcontrollerId() != NoneControlID)
+    {
+        if (getcontrollerId() != myControllerId_) 
+            title = "Controller by " + currentControllerName_ + " - " + loadedUrl;
+        else
+            title = "Controller by you - " + loadedUrl;
+    }
+    else
+        title = loadedUrl;
+    webview_->setWindowTitle(title);
 }
 
 void EC_WebView::LoadFinished(bool success)
@@ -641,11 +754,10 @@ void EC_WebView::RenderTimerStartOrSingleShot()
 {
     if (renderTimer_)
     {
-        if (renderTimer_->isActive())
-            LogWarning("RenderTimerStartOrSingleShot: Did you forget to stop timer before you called me?");
-
         if (getrenderRefreshRate() > 0)
         {
+            PrepareWebview();
+
             // Clamp FPS to 0-25, the EC editor UI does this for us with AttributeMetaData,
             // but someone can inject crazy stuff here directly from code
             int rateNow = 1000 / getrenderRefreshRate();
@@ -658,6 +770,11 @@ void EC_WebView::RenderTimerStartOrSingleShot()
     }
     else
         QTimer::singleShot(10, this, SLOT(Render()));
+
+    // If we get here we can safely reset the widget
+    // if no one has browser control
+    if (getrenderRefreshRate() == 0 && getcontrollerId() == NoneControlID)
+        ResetWebView();
 }
 
 void EC_WebView::TargetMeshReady()
@@ -743,61 +860,53 @@ void EC_WebView::ComponentRemoved(IComponent *component, AttributeChange::Type c
 
 void EC_WebView::AttributeChanged(IAttribute *attribute, AttributeChange::Type changeType)
 {
-    if (attribute == &webviewUrl)
+    if (webviewUrl.ValueChanged())
     {
-        if (!componentPrepared_ || !webview_)
-            return;
-
-        // Load the 'getwebviewUrl' page to our QWebView if it's not empty.
-        QString urlString = getwebviewUrl().simplified();
-        if (urlString.isEmpty())
-        {
-            RenderTimerStop();
-
-            // Restore the original materials from the mesh if user sets url to empty string.
-            EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
-            if (sceneCanvas)
-                sceneCanvas->RestoreOriginalMeshMaterials();
-            return;
-        }
-
-        LoadUrl(urlString);
+        webviewUrl.ClearChangedFlag();
+        LoadUrl(getwebviewUrl().simplified());
     }
-    else if (attribute == &webviewSize)
+    if (webviewSize.ValueChanged())
     {
-        if (!webview_)
-            return;
+        webviewSize.ClearChangedFlag();
 
         // Always keep a fixed size. If user wants to resize the
         // 2D widget, he needs to use the components attribute.
         // This is done to ensure shared browsing will always be same size on all clients.
         // The scroll event x,y positions will always show same content on both controller and slaves.
         QSize targetSize = QSize(getwebviewSize().x(), getwebviewSize().y());
-        if (webview_->size() != targetSize)
+        if (webview_ && webview_->size() != targetSize)
         {
             webview_->setFixedSize(targetSize);
             RenderDelayed();
         }
+
+        // If local webview is null we need to 
+        // update the static view with the new resolution
+        if (!webview_)
+            RenderDelayed();
     }
-    else if (attribute == &renderSubmeshIndex)
+    if (renderSubmeshIndex.ValueChanged())
     {
-        if (!componentPrepared_ || !webview_)
-            return;
+        renderSubmeshIndex.ClearChangedFlag();
 
         // Rendering will make sure this submesh index is not out of range.
         // If it is it will reset the submesh index to 0. This is very nice for the user experience.
         RenderDelayed();
     }
-    else if (attribute == &renderRefreshRate)
+    if (renderRefreshRate.ValueChanged())
     {
-        if (!componentPrepared_ || !webview_)
+        renderRefreshRate.ClearChangedFlag();
+
+        if (!componentPrepared_)
             return;
-        
+
         RenderTimerStop();
         RenderTimerStartOrSingleShot();
     }
-    else if (attribute == &controllerId)
+    if (controllerId.ValueChanged())
     {
+        controllerId.ClearChangedFlag();
+
         // If we have control, leave ui so that we can modify the attributes
         int currentControllerId = getcontrollerId();
         if (currentControllerId == myControllerId_)
@@ -834,14 +943,18 @@ void EC_WebView::AttributeChanged(IAttribute *attribute, AttributeChange::Type c
             ++iter;
         }
     }
-    else if (attribute == &illuminating)
+    if (illuminating.ValueChanged())
     {
+        illuminating.ClearChangedFlag();
+
         EC_WidgetCanvas *canvas = GetSceneCanvasComponent();
         if (canvas)
             canvas->SetSelfIllumination(getilluminating());
     }
-    else if (attribute == &enabled)
+    if (enabled.ValueChanged())
     {
+        enabled.ClearChangedFlag();
+
         EC_WidgetCanvas *sceneCanvas = GetSceneCanvasComponent();
         if (componentPrepared_ && sceneCanvas)
         {
@@ -849,6 +962,7 @@ void EC_WebView::AttributeChanged(IAttribute *attribute, AttributeChange::Type c
             if (!getenabled())
             {
                 sceneCanvas->RestoreOriginalMeshMaterials();
+                ResetWebView();
             }
             else
             {
@@ -909,19 +1023,27 @@ void EC_WebView::EntityClicked(Entity *entity, Qt::MouseButton button, RaycastRe
 
 void EC_WebView::InteractShowRequest()
 {
+    if (getcontrollerId() != NoneControlID || getrenderRefreshRate() > 0)
+        PrepareWebview();
+
     if (!webview_)
         return;
 
-    // Center the webview on the click position if possible.
-    QPoint globalMousePos = QCursor::pos();
-    QPoint showPos = globalMousePos;
-    if (globalMousePos.x() > (webview_->width() / 2))
-        showPos.setX(globalMousePos.x() - (webview_->width() / 2));
-    if (globalMousePos.y() > (webview_->height() / 2))
-        showPos.setY(globalMousePos.y() - (webview_->height() / 2));
+    if (!webview_->isVisible())
+    {
+        // Center the webview on the click position if possible.
+        QPoint globalMousePos = QCursor::pos();
+        QPoint showPos = globalMousePos;
+        if (globalMousePos.x() > (webview_->width() / 2))
+            showPos.setX(globalMousePos.x() - (webview_->width() / 2));
+        if (globalMousePos.y() > (webview_->height() / 2))
+            showPos.setY(globalMousePos.y() - (webview_->height() / 2));
 
-    webview_->move(showPos);
+        webview_->move(showPos);
+    }
     webview_->show();
+    webview_->activateWindow();
+    QApplication::setActiveWindow(webview_);
 }
 
 void EC_WebView::InteractControlRequest()
@@ -932,7 +1054,8 @@ void EC_WebView::InteractControlRequest()
         setcontrollerId(myControllerId_);
 
         // Send your local webview up to date url to others
-        setwebviewUrl(webview_->url().toEncoded());
+        if (webview_)
+            setwebviewUrl(webview_->url().toEncoded());
         
         // Resolve our user name, use connection id if not available
         QString myControllerName;
@@ -972,7 +1095,6 @@ void EC_WebView::InteractControlReleaseRequest()
         LogWarning("Seems like anyone does not have control? Making sure by releasing again.");
     setcontrollerId(NoneControlID);
     ParentEntity()->Exec(4, "WebViewControllerChanged", QString::number(NoneControlID), "");
-    EnableScrollbars(true);
 }
 
 void EC_WebView::EnableScrollbars(bool enabled)
@@ -996,6 +1118,9 @@ void EC_WebView::ActionScroll(QString x, QString y)
     int currentControlId = getcontrollerId();
     if (currentControlId != NoneControlID && currentControlId != myControllerId_)
     {
+        if (!webview_)
+            PrepareWebview();
+
         QPoint scrollPos(x.toInt(), y.toInt());
         webview_->page()->mainFrame()->setScrollPosition(scrollPos);
         Render();
