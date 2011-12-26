@@ -302,7 +302,7 @@ install_name_tool -change $QT_LPATH/QtNetwork.framework/Versions/4/QtNetwork @ex
 
 echo "# SkyX / Hydrax"
 install_name_tool -id @executable_path/../lib/libhydrax.0.5.3.dylib $tundrabundle/Contents/lib/libhydrax.0.5.3.dylib
-install_name_tool -id @executable_path/../lib/libskyx.0.1.1.dylib $tundrabundle/Contents/lib/libskyx.0.1.1.dylib
+install_name_tool -id @executable_path/../lib/libskyx.0.2.1.dylib $tundrabundle/Contents/lib/libskyx.0.2.1.dylib
 
 #echo "# Theora"
 #install_name_tool -id @executable_path/../lib/libtheora.0.dylib $tundrabundle/Contents/lib/libtheora.0.dylib
@@ -457,7 +457,7 @@ install_name_tool -change $TUNDRA_PWD/bin/plugins/JavascriptModule.dylib @execut
 echo "--- SkyXHydrax.dylib ---"
 install_name_tool -id @executable_path/plugins/SkyXHydrax.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
 
-install_name_tool -change libskyx.0.1.1.dylib @executable_path/../lib/libskyx.0.1.1.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
+install_name_tool -change libskyx.0.2.1.dylib @executable_path/../lib/libskyx.0.2.1.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
 install_name_tool -change libhydrax.0.5.3.dylib @executable_path/../lib/libhydrax.0.5.3.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
 install_name_tool -change $TUNDRA_PWD/bin/plugins/OgreRenderingModule.dylib @executable_path/plugins/OgreRenderingModule.dylib $tundrabundle/Contents/MacOS/plugins/SkyXHydrax.dylib
 
