@@ -13,7 +13,7 @@
   <plugin path="SkyXHydrax" />                  <!-- SkyXHydrax depends on OgreRenderingModule -->
   <plugin path="OgreAssetEditorModule" />       <!-- OgreAssetEditorModule depends on OgreRenderingModule -->
   <plugin path="DebugStatsModule" />            <!-- DebugStatsModule depends on OgreRenderingModule, EnvironmentModule and AssetModule -->
-  <plugin path="BrowserUiPlugin" />             <!-- Depends on JavascriptModule -->    
+  <plugin path="BrowserUiPlugin" />             <!-- Depends on JavascriptModule -->  
   <plugin path="SceneWidgetComponents" />       <!-- Depends on OgreRenderingModule and TundraProtocolModule (and optionally on BrowserUiPlugin) -->
   <plugin path="CAVEStereoModule" />            <!-- CAVEStereoModule depends on OgreRenderingModule. This plugin does nothing in headless mode. -->
 
