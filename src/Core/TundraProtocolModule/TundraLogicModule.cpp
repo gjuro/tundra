@@ -350,9 +350,9 @@ void TundraLogicModule::LoadStartupScene()
             LogInfo("[TundraLogic] Loading startup scene from " + startupScene);
             bool useBinary = startupScene.indexOf(".tbin") != -1;
             if (!useBinary)
-                scene->LoadSceneXML(startupScene, false/*clearScene*/, false/*replaceOnConflict*/, AttributeChange::Default);
+                scene->LoadSceneXML(startupScene, false/*clearScene*/, true/*useEntityIDsFromFile*/, AttributeChange::Default);
             else
-                scene->LoadSceneBinary(startupScene, false/*clearScene*/, false/*replaceOnConflict*/, AttributeChange::Default);
+                scene->LoadSceneBinary(startupScene, false/*clearScene*/, true/*useEntityIDsFromFile*/, AttributeChange::Default);
         }
     }
 }
@@ -368,9 +368,9 @@ void TundraLogicModule::StartupSceneLoaded(AssetPtr asset)
     {
         bool useBinary = sceneDiskSource.endsWith(".tbin");
         if (!useBinary)
-            scene->LoadSceneXML(sceneDiskSource, true/*clearScene*/, false/*replaceOnConflict*/, AttributeChange::Default);
+            scene->LoadSceneXML(sceneDiskSource, true/*clearScene*/, true/*useEntityIDsFromFile*/, AttributeChange::Default);
         else
-            scene->LoadSceneBinary(sceneDiskSource, true/*clearScene*/, false/*replaceOnConflict*/, AttributeChange::Default);
+            scene->LoadSceneBinary(sceneDiskSource, true/*clearScene*/, true/*useEntityIDsFromFile*/, AttributeChange::Default);
     }
     else
         LogError("Could not resolve disk source for loaded scene file " + asset->Name());
