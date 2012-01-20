@@ -35,8 +35,6 @@
 
 #if defined(_WINDOWS)
 #include "Win.h"
-#undef _WINSOCKAPI_ 
-#endif
 #include <shlobj.h>
 #include <io.h>
 #include <fcntl.h>
@@ -645,19 +643,6 @@ void Application::AboutToExit()
     // If no-one canceled the exit as a response to the signal, exit
     if (framework->IsExiting())
         quit();
-}
-
-QString Application::Platform()
-{
-#ifdef Q_WS_WIN
-    return QString("win");
-#elif defined(Q_WS_MAC)
-    return QString("mac");
-#elif defined(Q_WS_X11)
-    return QString("x11");
-#else
-    return QString();
-#endif
 }
 
 QString Application::Platform()

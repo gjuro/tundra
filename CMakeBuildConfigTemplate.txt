@@ -18,7 +18,6 @@
 set (BUILD_SDK_ONLY 0)              # Configure if you want to build only the SDK, meaning projects from src/Application will be omitted
 set (BUILDING_INSTALLER 0)          # Enables additional resources to create icon for the main executable.
 set (ENABLE_BUILD_OPTIMIZATIONS 0)  # Only for Windows: Enables optimizations for compiler and linker. Do not enable this if you are planning to distribute your .lib files! Warning: Increases build time significantly.
-set (ENABLE_BUILD_OPTIMIZATIONS 0)  # Only for Windows: Enables optimizations for compiler and linker. Do not enable this if you are planning to distribute your .lib files! Warning: Increases build time significantly.
 set (ENABLE_HYDRAX 1)               # Configure the use of Hydrax, http://www.ogre3d.org/tikiwiki/Hydrax
 set (ENABLE_SKYX 1)                 # Configure the use of SkyX, http://www.ogre3d.org/tikiwiki/SkyX
 set (ENABLE_OGRE_ASSET_EDITOR 1)    # Enables Ogre asset editor module.

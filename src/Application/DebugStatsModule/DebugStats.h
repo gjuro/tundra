@@ -15,9 +15,6 @@
 #include <QPointer>
 
 #include "HighPerfClock.h"
-#if defined(_WINSOCKAPI_)
-#undef _WINSOCKAPI_ 
-#endif
 
 class TimeProfilerWindow;
 
