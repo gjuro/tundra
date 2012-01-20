@@ -90,8 +90,8 @@ void Plane::Set(const float3 &point, const float3 &normal_)
 	assume(normal.IsNormalized());
 	d = Dot(point, normal);
 
-	assume(EqualAbs(SignedDistance(point), 0.f));
-	assume(EqualAbs(SignedDistance(point + normal_), 1.f));
+	assume(EqualAbs(SignedDistance(point), 0.f, 0.01f));
+	assume(EqualAbs(SignedDistance(point + normal_), 1.f, 0.01f));
 }
 
 void Plane::ReverseNormal()
@@ -449,7 +449,7 @@ bool IntersectLinePlane(const float3 &ptOnPlane, const float3 &planeNormal, cons
 	if (EqualAbs(denom, 0.f))
 		return false; // Either we have no intersection, or the whole line is on the plane. @todo distinguish these cases.
 	if (t)
-		*t = Dot(ptOnPlane - lineStart, planeNormal);
+		*t = Dot(ptOnPlane - lineStart, planeNormal) / denom;
 	return true;
 }
 

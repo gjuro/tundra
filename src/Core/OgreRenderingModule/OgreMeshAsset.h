@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #pragma once
 
@@ -54,7 +54,7 @@ public:
 
 private:
     /// Process mesh data after loading to create tangents and such.
-    void GenerateMeshdata();
+    bool GenerateMeshdata();
 
 };
 

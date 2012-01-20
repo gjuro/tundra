@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #include "StableHeaders.h"
 
@@ -169,7 +169,7 @@ namespace MumbleLib
     {
         if (left_)
             return -1;
-        boost::shared_ptr<::MumbleClient::Channel> mumble_channel = user_.channel.lock();
+        boost::shared_ptr< ::MumbleClient::Channel> mumble_channel = user_.channel.lock();
         if (mumble_channel)
             return user_.channel.lock()->id;
         else

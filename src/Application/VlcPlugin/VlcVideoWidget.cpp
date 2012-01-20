@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #include "VlcVideoWidget.h"
 #include "LoggingFunctions.h"
@@ -158,9 +158,9 @@ libvlc_state_t VlcVideoWidget::GetMediaState() const
     return libvlc_media_get_state(vlcMedia_);
 }
 
-boost::uint_least64_t VlcVideoWidget::GetMediaLenght()
+s64 VlcVideoWidget::GetMediaLenght()
 {
-    boost::uint_least64_t len = 0.0;
+    s64 len = 0;
     if (!Initialized() || !vlcMedia_)
         return len;
 
@@ -172,9 +172,9 @@ boost::uint_least64_t VlcVideoWidget::GetMediaLenght()
     return len;
 }
 
-boost::uint_least64_t VlcVideoWidget::GetMediaTime()
+s64 VlcVideoWidget::GetMediaTime()
 {
-    boost::uint_least64_t time = 0.0;
+    s64 time = 0;
     if (!Initialized() || !vlcMedia_)
         return time;
 
@@ -240,7 +240,7 @@ void VlcVideoWidget::Stop()
     }
 }
 
-bool VlcVideoWidget::Seek(boost::uint_least64_t time)
+bool VlcVideoWidget::Seek(s64 time)
 {
     if (vlcPlayer_)
     {

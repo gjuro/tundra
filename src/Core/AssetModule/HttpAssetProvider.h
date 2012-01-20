@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #pragma once
 
@@ -36,8 +36,6 @@ public:
     /** @return true if this asset provider can handle the id */
     virtual bool IsValidRef(QString assetRef, QString assetType = "");
     
-    virtual bool IsValidDiskSource(const QString assetRef, const QString &diskSource);
-
     virtual AssetTransferPtr RequestAsset(QString assetRef, QString assetType);
 
     /// Adds the given http URL to the list of current asset storages.
@@ -54,7 +52,7 @@ public:
     virtual AssetStoragePtr GetStorageForAssetRef(const QString &assetRef) const;
 
     /// Starts an asset upload from the given file in memory to the given storage.
-    virtual AssetUploadTransferPtr UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const char *assetName);
+    virtual AssetUploadTransferPtr UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const QString &assetName);
 
     /// Issues a http DELETE request for the given asset.
     virtual void DeleteAssetFromStorage(QString assetRef);

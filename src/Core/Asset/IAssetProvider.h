@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #pragma once
 
@@ -11,30 +11,21 @@
 /** Asset providers receive asset download requests through the RequestAsset() function. It should
     return true if the asset id was of such format that the request can be handled (for example
     a valid UUID for legacy UDP assets), false if it could not be handled.
-        
+
     Additionally, the asset provider can post events of the progress of an asset download. */
 class IAssetProvider
 {
 public:
     IAssetProvider() {}
-    virtual ~IAssetProvider() {}   
+    virtual ~IAssetProvider() {}
 
     /// Returns name of asset provider for identification purposes
     virtual QString Name() = 0;
 
     /// Queries this asset provider whether the assetRef is a valid assetRef this provider can handle.
-    /// @param assetType The type of the asset. This field is optional, and the ref itself can specify the type,
-    ///        or if the provider in question does not need the type information, this can be left blank.
+    /** @param assetType The type of the asset. This field is optional, and the ref itself can specify the type,
+               or if the provider in question does not need the type information, this can be left blank. */
     virtual bool IsValidRef(QString assetRef, QString assetType) = 0;
-
-    /// Queries if the acquired disk source is still valid for the provider.
-    /// This is a change for the provider to step in and force a RequestAsset call for the assetRef.
-    /// @note Implementing this in a provider is optional. Default implementation always return true.
-    /// @param assetRef Asset reference.
-    /// @param diskSource Absolute file path for the cache file for assetRef.
-    /// @return True if the disk source is still valid, false if the provider wants 
-    /// the assetRef to be requested via its RequestAsset function.
-    virtual bool IsValidDiskSource(const QString assetRef, const QString &diskSource) { return true; }
 
     virtual AssetTransferPtr RequestAsset(QString assetRef, QString assetType) = 0;
 
@@ -45,11 +36,8 @@ public:
     virtual void Update(f64 frametime) {}
 
     /// Issues an asset deletion request to the asset storage and provider this asset resides in.
-    /// If the asset provider supports this feature, it will delete the asset from the source.
-    virtual void DeleteAssetFromStorage(QString assetRef)
-    { 
-        ///\todo Log error unimplemented!
-    }
+    /** If the asset provider supports this feature, it will delete the asset from the source. */
+    virtual void DeleteAssetFromStorage(QString assetRef) = 0;
 
     /// Removes the storage with the given name from this provider, or returns false if it doesn't exist.
     virtual bool RemoveAssetStorage(QString storageName) { return false; }
@@ -60,12 +48,12 @@ public:
     virtual AssetStoragePtr GetStorageByName(const QString &name) const = 0;
 
     virtual AssetStoragePtr GetStorageForAssetRef(const QString &assetRef) const = 0;
-    
+
     /// Starts an asset upload from the given file in memory to the given storage.
-    /// The default implementation fails all upload attempts and returns 0 immediately.
-    virtual AssetUploadTransferPtr UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const char *assetName) { return AssetUploadTransferPtr(); }
+    /** The default implementation fails all upload attempts and returns 0 immediately. */
+    virtual AssetUploadTransferPtr UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const QString &assetName) { return AssetUploadTransferPtr(); }
 
     /// Reads the given storage string and tries to deserialize it to an asset storage in this provider.
-    /// Returns a pointer to the newly created storage, or 0 if the storage string is not of the type of this asset provider.
+    /** Returns a pointer to the newly created storage, or 0 if the storage string is not of the type of this asset provider. */
     virtual AssetStoragePtr TryDeserializeStorageFromString(const QString &storage, bool fromNetwork) = 0;
 };

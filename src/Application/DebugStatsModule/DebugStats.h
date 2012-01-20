@@ -1,5 +1,5 @@
 /**
- *  For conditions of distribution and use, see copyright notice in license.txt
+ *  For conditions of distribution and use, see copyright notice in LICENSE
  *
  *  @file   DebugStats.h
  *  @brief  Shows information about internal core data structures in separate windows.
@@ -14,12 +14,9 @@
 #include <QObject>
 #include <QPointer>
 
-#if defined(_WINDOWS)
+#include "HighPerfClock.h"
 #if defined(_WINSOCKAPI_)
 #undef _WINSOCKAPI_ 
-#endif
-#include <WinSock2.h>
-#include <Windows.h>
 #endif
 
 class TimeProfilerWindow;
@@ -58,7 +55,5 @@ private:
     std::vector<std::pair<u64, double> > frameTimes; ///< A history of estimated frame times.
     QPointer<TimeProfilerWindow> profilerWindow_; /// Profiler window
     boost::shared_ptr<InputContext> inputContext; ///< InputContext for Shift-P - Profiler window shortcut.
-#ifdef _WINDOWS
-    LARGE_INTEGER lastCallTime; ///< Last call time of Update() function
-#endif
+    tick_t lastCallTime;
 };

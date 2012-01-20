@@ -1,5 +1,6 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
+#include "Math/MathNamespace.h"
 #include "StableHeaders.h"
 #include "DebugOperatorNew.h"
 #include "EC_WidgetCanvas.h"
@@ -390,11 +391,9 @@ bool EC_WidgetCanvas::Blit(const QImage &source, Ogre::TexturePtr destination)
                     for(size_t y = 0; y < source.height(); ++y)
                         memcpy((u8*)lock.pBits + lock.Pitch * y, source.bits() + sourceStride * y, sourceStride);
                 surface->UnlockRect();
-                return true;
             }
         }
     }
-    return false;
 #else
     if (!destination->getBuffer().isNull())
     {
@@ -403,6 +402,8 @@ bool EC_WidgetCanvas::Blit(const QImage &source, Ogre::TexturePtr destination)
         destination->getBuffer()->blitFromMemory(pixel_box, update_box);
     }
 #endif
+
+    return true;
 
     return true;
 }

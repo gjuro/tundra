@@ -1,5 +1,5 @@
 /**
- *  For conditions of distribution and use, see copyright notice in license.txt
+ *  For conditions of distribution and use, see copyright notice in LICENSE
  *
  *  @file   EC_SkyX.cpp
  *  @brief  A sky component using SkyX, http://www.ogre3d.org/tikiwiki/SkyX
@@ -174,14 +174,14 @@ void EC_SkyX::Create()
 
     // Return if main camera is not set
     OgreWorldPtr w = ParentScene()->GetWorld<OgreWorld>();
-    if (!w || !w->GetRenderer())
+    if (!w || !w->Renderer())
         return;
-    if (!w->GetRenderer()->MainCamera())
+    if (!w->Renderer()->MainCamera())
     {
-        connect(w->GetRenderer(), SIGNAL(MainCameraChanged(Entity*)), this, SLOT(Create()), Qt::UniqueConnection);
+        connect(w->Renderer(), SIGNAL(MainCameraChanged(Entity*)), this, SLOT(Create()), Qt::UniqueConnection);
         return;
     }
-    disconnect(w->GetRenderer(), SIGNAL(MainCameraChanged(Entity*)), this, SLOT(Create()));
+    disconnect(w->Renderer(), SIGNAL(MainCameraChanged(Entity*)), this, SLOT(Create()));
 
     // SkyX is a singleton component, refuse to add multiple in a scene!
     bool sceneHasSkyX = false;
@@ -222,7 +222,7 @@ void EC_SkyX::Create()
         Remove();
 
         impl = new EC_SkyXImpl();
-        impl->skyX = new SkyX::SkyX(w->GetSceneManager(), impl->controller);
+        impl->skyX = new SkyX::SkyX(w->OgreSceneManager(), impl->controller);
         impl->skyX->create();
 
         RegisterListeners();
@@ -234,7 +234,7 @@ void EC_SkyX::Create()
 
         connect(framework->Frame(), SIGNAL(Updated(float)), SLOT(Update(float)), Qt::UniqueConnection);
         connect(this, SIGNAL(AttributeChanged(IAttribute*, AttributeChange::Type)), SLOT(UpdateAttribute(IAttribute*, AttributeChange::Type)), Qt::UniqueConnection);
-        connect(w->GetRenderer(), SIGNAL(MainCameraChanged(Entity*)), SLOT(OnActiveCameraChanged(Entity*)), Qt::UniqueConnection);
+        connect(w->Renderer(), SIGNAL(MainCameraChanged(Entity*)), SLOT(OnActiveCameraChanged(Entity*)), Qt::UniqueConnection);
 
         CreateSunlight();
     }
@@ -251,11 +251,11 @@ void EC_SkyX::CreateSunlight()
     {
         // Ambient and sun diffuse color copied from EC_EnvironmentLight
         OgreWorldPtr w = ParentScene()->GetWorld<OgreWorld>();
-        Ogre::SceneManager *sm = w->GetSceneManager();
+        Ogre::SceneManager *sm = w->OgreSceneManager();
         impl->originalAmbientColor = sm->getAmbientLight();
         sm->setAmbientLight(Color(0.364f, 0.364f, 0.364f, 1.f));
 
-        impl->sunlight = sm->createLight(w->GetRenderer()->GetUniqueObjectName("SkyXSunlight"));
+        impl->sunlight = sm->createLight(w->Renderer()->GetUniqueObjectName("SkyXSunlight"));
         impl->sunlight->setType(Ogre::Light::LT_DIRECTIONAL);
         impl->sunlight->setDiffuseColour(Color(0.639f,0.639f,0.639f));
         impl->sunlight->setSpecularColour(0.f,0.f,0.f);
@@ -290,6 +290,16 @@ void EC_SkyX::UpdateAttribute(IAttribute *attr, AttributeChange::Type change)
     {
         // If both active, disable the other option so toggle works nicely in ui.
         if (volumetricClouds.Get() && normalClouds.Get())
+        {
+            if (attr == &volumetricClouds)
+                normalClouds.Set(false, AttributeChange::Default);
+            else if (attr == &normalClouds)
+                volumetricClouds.Set(false, AttributeChange::Default);
+            return;
+        }
+
+        // Unload normal clouds
+        if (impl->skyX->getCloudsManager())
         {
             if (attr == &volumetricClouds)
                 normalClouds.Set(false, AttributeChange::Default);
@@ -486,6 +496,33 @@ void EC_SkyX::UpdateAttribute(IAttribute *attr, AttributeChange::Type change)
             impl->cloudLayerBottom->setOptions(optionsBottom);
             impl->cloudLayerTop->setOptions(optionsBottom);            
         }
+    }
+    else if (attr == &windSpeed)
+    {
+        if (volumetricClouds.Get())
+        {
+            impl->skyX->getVCloudsManager()->setAutoupdate(false);
+            impl->skyX->getVCloudsManager()->getVClouds()->setWindSpeed(windSpeed.Get());
+        }
+        if (normalClouds.Get())
+        {
+            if (!impl->cloudLayerBottom || !impl->cloudLayerTop)
+                return;
+
+            SkyX::CloudLayer::Options optionsBottom = impl->cloudLayerBottom->getOptions();
+            SkyX::CloudLayer::Options optionsTop = impl->cloudLayerTop->getOptions();
+
+            float speedMultiplier = windSpeed.Get() / 2.0f;
+            optionsBottom.TimeMultiplier = speedMultiplier;
+            optionsTop.TimeMultiplier = speedMultiplier + 0.5f;
+
+            impl->cloudLayerBottom->setOptions(optionsBottom);
+            impl->cloudLayerTop->setOptions(optionsBottom);   
+        }
+    }
+    else if (attr == &sunInnerRadius || attr == &sunOuterRadius)
+    {
+        ApplyAtmosphereOptions();
     }
     else if (attr == &windSpeed)
     {

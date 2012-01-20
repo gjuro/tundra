@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #include "StableHeaders.h"
 #include "DebugOperatorNew.h"
@@ -143,14 +143,6 @@ QByteArray HttpAssetProvider::ToHttpDate(const QDateTime &dateTime)
     // Sun, 06 Nov 1994 08:49:37 GMT - RFC 822.
     return QLocale::c().toString(dateTime, "ddd, dd MMM yyyy hh:mm:ss").toAscii() + QByteArray(" GMT");
 }
-
-bool HttpAssetProvider::IsValidDiskSource(const QString assetRef, const QString &diskSource)
-{
-    // For the http provider we always return false. We never want AssetAPI to use a cache file
-    // before doing a RequestAsset first. This is when a last modified header check is performed
-    // to determine if the source asset is never than what we have in cache.
-    return false;
-}
         
 AssetTransferPtr HttpAssetProvider::RequestAsset(QString assetRef, QString assetType)
 {
@@ -200,7 +192,7 @@ AssetTransferPtr HttpAssetProvider::RequestAsset(QString assetRef, QString asset
     return transfer;
 }
 
-AssetUploadTransferPtr HttpAssetProvider::UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const char *assetName)
+AssetUploadTransferPtr HttpAssetProvider::UploadAssetFromFileInMemory(const u8 *data, size_t numBytes, AssetStoragePtr destination, const QString &assetName)
 {
     if (!networkAccessManager)
         CreateAccessManager();
@@ -338,7 +330,7 @@ void HttpAssetProvider::OnHttpTransferFinished(QNetworkReply *reply)
             if (replyCode == 304)
             {
                 // Read cache file to transfer asset data
-                QFile cacheFile(cache->GetDiskSourceByRef(sourceRef));
+                QFile cacheFile(cache->FindInCache(sourceRef));
                 if (cacheFile.open(QIODevice::ReadOnly))
                 {
                     QByteArray cacheData = cacheFile.readAll();
@@ -379,7 +371,7 @@ void HttpAssetProvider::OnHttpTransferFinished(QNetworkReply *reply)
                 else
                 {
                     // Remove possible cache file if caching is disabled for the transfer.
-                    if (!cache->GetDiskSourceByRef(sourceRef).isEmpty())
+                    if (!cache->FindInCache(sourceRef).isEmpty())
                         cache->DeleteAsset(sourceRef);
                 }
             }
