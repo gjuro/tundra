@@ -353,8 +353,8 @@ namespace MumbleLib
         case CELT_BAD_ARG:
             LogError("Cannot create CELT decoder: CELT_BAD_ARG");
             return 0;
-        case CELT_INVALID_MODE:
-            LogError("Cannot create CELT decoder: CELT_INVALID_MODE");
+        case CELT_BUFFER_TOO_SMALL:
+            LogError("Cannot create CELT decoder: CELT_BUFFER_TOO_SMALL");
             return 0;
         case CELT_INTERNAL_ERROR:
             LogError("Cannot create CELT decoder: CELT_INTERNAL_ERROR");
@@ -820,8 +820,8 @@ namespace MumbleLib
                 case CELT_BAD_ARG:
                     LogError("CELT decoding error: CELT_BAD_ARG");
                     break;
-                case CELT_INVALID_MODE:
-                    LogError("CELT decoding error: CELT_INVALID_MODE");
+                case CELT_BUFFER_TOO_SMALL:
+                    LogError("CELT decoding error: CELT_BUFFER_TOO_SMALL");
                     break;
                 case CELT_INTERNAL_ERROR:
                     LogError("CELT decoding error: CELT_INTERNAL_ERROR");

@@ -588,6 +588,7 @@ void EC_WebView::ResetWebView(bool ignoreVisibility)
     webviewHasContent_ = false;
 }
 
+#ifndef QT_NO_OPENSSL
 void EC_WebView::OnSslErrors(QNetworkReply *reply, const QList<QSslError>& errors)
 {
     LogWarning("EC_WebView: Could not load page, ssl errors occurred in url '" + getwebviewUrl() + "'");
@@ -600,6 +601,7 @@ void EC_WebView::OnSslErrors(QNetworkReply *reply, const QList<QSslError>& error
     }
     StopBrowser();
 }
+#endif
 
 void EC_WebView::LoadRequested(const QUrl &url)
 {

@@ -14,7 +14,10 @@
 #include <QPoint>
 #include <QTimer>
 #include <QMenu>
+
+#ifndef QT_NO_OPENSSL
 #include <QSslError>
+#endif
 
 class QWebView;
 class QNetworkReply;
@@ -22,7 +25,7 @@ class QNetworkReply;
 class EC_Mesh;
 class EC_WidgetCanvas;
 
-class RaycastResult;
+class RaycastResult; 
 class UserConnection;
 
 namespace TundraLogic { class Server; }
@@ -192,8 +195,10 @@ private slots:
     /// Free QWebView memory and reset internal pointer.
     void ResetWebView(bool ignoreVisibility = false);
 
+#ifndef	QT_NO_OPENSSL
     /// Handle browser SSL errors.
     void OnSslErrors(QNetworkReply *reply, const QList<QSslError>& errors);
+#endif
 
     /// Handler for QWebView::linkClicked(const QUrl&)
     void LoadRequested(const QUrl &url);
