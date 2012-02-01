@@ -359,6 +359,11 @@ void KristalliProtocolModule::ClientDisconnected(MessageConnection *source)
     ::LogWarning("User without a known UserConnection* disconnected!");
 }
 
+void KristalliProtocolModule::HandleMessage(kNet::MessageConnection *source, kNet::packet_id_t packetId, kNet::message_id_t id, const char *data, size_t numBytes)
+{
+    HandleMessage(source, id, data, numBytes);
+}
+
 void KristalliProtocolModule::HandleMessage(MessageConnection *source, message_id_t id, const char *data, size_t numBytes)
 {
     assert(source);

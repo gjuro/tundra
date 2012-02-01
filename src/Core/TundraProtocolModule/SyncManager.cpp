@@ -1188,7 +1188,13 @@ void SyncManager::HandleRemoveEntity(kNet::MessageConnection* source, const char
     
     if (!ValidateAction(source, cRemoveEntityMessage, entityID))
         return;
-    
+
+    EntityPtr entity = scene->GetEntity(entityID);
+
+    UserConnection *user = owner_->GetKristalliModule()->GetUserConnection(source);
+    if (entity && !scene->AllowModifyEntity(user, entity.get()))
+        return;
+
     if (!scene->GetEntity(entityID))
     {
         LogWarning("Missing entity " + QString::number(entityID) + " for RemoveEntity message");
@@ -1223,8 +1229,13 @@ void SyncManager::HandleRemoveComponents(kNet::MessageConnection* source, const 
     
     if (!ValidateAction(source, cRemoveComponentsMessage, entityID))
         return;
-    
+
     EntityPtr entity = scene->GetEntity(entityID);
+
+    UserConnection *user = owner_->GetKristalliModule()->GetUserConnection(source);
+    if (entity && !scene->AllowModifyEntity(user, entity.get()))
+        return;
+
     if (!entity)
     {
         LogWarning("Entity " + QString::number(entityID) + " not found for RemoveComponents message");
@@ -1367,6 +1378,11 @@ void SyncManager::HandleRemoveAttributes(kNet::MessageConnection* source, const 
         return;
     
     EntityPtr entity = scene->GetEntity(entityID);
+
+    UserConnection *user = owner_->GetKristalliModule()->GetUserConnection(source);
+    if (entity && !scene->AllowModifyEntity(user, entity.get()))
+        return;
+
     if (!entity)
     {
         LogWarning("Entity " + QString::number(entityID) + " not found for RemoveAttributes message");
@@ -1413,6 +1429,18 @@ void SyncManager::HandleEditAttributes(kNet::MessageConnection* source, const ch
     
     if (!ValidateAction(source, cRemoveAttributesMessage, entityID))
         return;
+        
+    EntityPtr entity = scene->GetEntity(entityID);
+    UserConnection* user = owner_->GetKristalliModule()->GetUserConnection(source);
+
+    if (entity && !scene->AllowModifyEntity(user, entity.get())) // check if allowed to modify this entity.
+        return;
+
+    if (!entity)
+    {
+        LogWarning("Entity " + QString::number(entityID) + " not found for EditAttributes message");
+        return;
+    }
     
     // Record the update time for calculating the update interval
     float updateInterval = updatePeriod_; // Default update interval if state not found or interval not measured yet
@@ -1425,17 +1453,6 @@ void SyncManager::HandleEditAttributes(kNet::MessageConnection* source, const ch
     }
     // Add a fudge factor in case there is jitter in packet receipt or the server is too taxed
     updateInterval *= 1.25f;
-    
-    EntityPtr entity = scene->GetEntity(entityID);
-    UserConnection* user = owner_->GetKristalliModule()->GetUserConnection(source);
-    if (!entity)
-    {
-        LogWarning("Entity " + QString::number(entityID) + " not found for EditAttributes message");
-        return;
-    }
-    
-    if (!scene->AllowModifyEntity(user, 0)) //to check if creating entities is allowed (for this user)
-        return;
 
     std::vector<IAttribute*> changedAttrs;
     while (ds.BitsLeft() >= 8)
@@ -1659,7 +1676,7 @@ void SyncManager::HandleEntityAction(kNet::MessageConnection* source, MsgEntityA
     ScenePtr scene = GetRegisteredScene();
     if (!scene)
     {
-        LogWarning("SyncManager: Ignoring received MsgEntityAction as no scene exists!");
+        LogWarning("SyncManager: Ignoring received MsgEntityAction \"" + QString(msg.name.size() == 0 ? "(null)" : std::string((const char *)&msg.name[0], msg.name.size()).c_str()) + "\" (" + QString::number(msg.parameters.size()) + " parameters) for entity ID " + QString::number(msg.entityId) + " as no scene exists!");
         return;
     }
     
@@ -1667,8 +1684,8 @@ void SyncManager::HandleEntityAction(kNet::MessageConnection* source, MsgEntityA
     EntityPtr entity = scene->GetEntity(entityId);
     if (!entity)
     {
-        LogWarning("Entity " + ToString<int>(entityId) + " not found for EntityAction message.");
-        return; ///\todo Are we ok to return here? Perhaps we should replicate this action to peers if they might have an entity with that id in the scene?
+        LogWarning("Entity with ID " + QString::number(entityId) + " not found for EntityAction message \"" + QString(msg.name.size() == 0 ? "(null)" : std::string((const char *)&msg.name[0], msg.name.size()).c_str()) + "\" (" + QString::number(msg.parameters.size()) + " parameters).");
+        return;
     }
 
     // If we are server, get the user who sent the action, so it can be queried
