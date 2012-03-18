@@ -63,6 +63,18 @@ public:
     ~KinectDevice();
 
 public slots:
+    /// Returns if a Kinect device is available.
+    bool HasKinect();
+
+    /// Returns if Kinect has been started with StartKinect function.
+    bool IsStarted();
+
+    /// Starts Kinect if not running.
+    bool StartKinect();
+
+    /// Stops Kinect if running.
+    void StopKinect();
+
     /// Get current skeleton tracking state.
     /// @return bool True if currently tracking and emitting SkeletonUpdate signal, false if we lost the skeleton(s).
     bool IsTrackingSkeletons();

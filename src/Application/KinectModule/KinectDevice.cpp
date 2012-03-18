@@ -44,6 +44,26 @@ void KinectDevice::SetTrackingSkeletons(bool tracking)
     emit TrackingSkeletons(tracking);
 }
 
+bool KinectDevice::HasKinect()
+{
+    return (owner_ != 0 ? owner_->HasKinect() : false);
+}
+
+bool KinectDevice::IsStarted()
+{
+    return (owner_ != 0 ? owner_->IsStarted() : false);
+}
+
+bool KinectDevice::StartKinect()
+{
+    return (owner_ != 0 ? owner_->StartKinect() : false);
+}
+
+void KinectDevice::StopKinect()
+{
+    return (owner_ != 0 ? owner_->StopKinect() : false);
+}
+
 bool KinectDevice::IsTrackingSkeletons()
 {
     return isTrackingSkeletons_;

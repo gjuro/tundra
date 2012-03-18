@@ -93,6 +93,9 @@ void KinectModule::Uninitialize()
 
 bool KinectModule::HasKinect()
 {
+    if (IsStarted())
+        return true;
+
     HRESULT result;
     int numKinects = 0;
     result = NuiGetSensorCount(&numKinects);
