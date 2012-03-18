@@ -1,42 +1,60 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
-#include "StableHeaders.h"
 #include "KinectDevice.h"
+#include "KinectModule.h"
+#include "KinectSkeleton.h"
 
-KinectDevice::KinectDevice(QObject *parent) :
-    QObject(parent),
+KinectDevice::KinectDevice(KinectModule *owner) :
+    owner_(owner),
     isTrackingSkeletons_(false)
 {
 }
 
 KinectDevice::~KinectDevice()
 {
+    owner_ = 0;
 }
 
-void KinectDevice::DoVideoUpdate(const QImage &image)
+void KinectDevice::EmitVideoUpdate()
 {
-    emit VideoUpdate(image);
+    emit VideoUpdate();
 }
 
-void KinectDevice::DoDepthUpdate(const QImage &image)
+void KinectDevice::EmitDepthUpdate()
 {
-    emit DepthUpdate(image);
+    emit DepthUpdate();
 }
 
-void KinectDevice::DoSkeletonUpdate(const QVariantMap &data)
+void KinectDevice::EmitSkeletonUpdate(KinectSkeleton *skeleton)
 {
+    if (!skeleton)
+        return;
     if (!isTrackingSkeletons_)
-        SetSkeletonTracking(true);
-    emit SkeletonUpdate(data);
+        SetTrackingSkeletons(true);
+
+    emit SkeletonStateChanged(skeleton->IsTracking(), skeleton);
 }
 
-void KinectDevice::SetSkeletonTracking(bool tracking)
+void KinectDevice::SetTrackingSkeletons(bool tracking)
 {
+    if (isTrackingSkeletons_ == tracking)
+        return;
+
     isTrackingSkeletons_ = tracking;
-    emit TrackingSkeleton(tracking);
+    emit TrackingSkeletons(tracking);
 }
 
 bool KinectDevice::IsTrackingSkeletons()
 {
     return isTrackingSkeletons_;
+}
+
+QImage KinectDevice::VideoImage()
+{
+    return (owner_ != 0 ? owner_->VideoImage() : QImage());
+}
+
+QImage KinectDevice::DepthImage()
+{
+    return (owner_ != 0 ? owner_->DepthImage() : QImage());
 }

@@ -1,4 +1,4 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #pragma once
 
@@ -6,16 +6,16 @@
 #include "KinectAPI.h"
 #include "KinectFwd.h"
 
-#include <windows.h>        // Generally needed for this modules code, windows HRESULT, HANDLE etc.
-#include <ObjBase.h>        // This defines 'interface' as struct, needed with MSR_NuiApi.h
-#include <MSR_NuiApi.h>     // Microsoft Kinect SDK API header
-
-#include "KinectHelper.h"   // Include after the above
+#include "Win.h"
+#include <NuiApi.h>
+#include "KinectHelper.h"
 
 #include <QObject>
+#include <QMutex>
 #include <QVariant>
 #include <QList>
 #include <QLabel>
+#include <QImage>
 #include <QSize>
 
 /*! KinectModule reads Kinect with Microsoft Kinect SDK. A dynamic object 'kinect' 
@@ -41,18 +41,27 @@ public:
     /// IModule override
     void Uninitialize();
 
+    bool HasKinect();
+    bool IsStarted();
+
+    bool StartKinect();
+    void StopKinect();
+
+    QImage VideoImage();
+    QImage DepthImage();
+
 private slots:
     /// Callback from Kinect processing thread.
     /// @note Do not call this from outside KinectModule.
-    void OnVideoReady(const QImage videoImage);
+    void OnVideoReady();
 
     /// Callback from Kinect processing thread.
     /// @note Do not call this from outside KinectModule.
-    void OnDepthReady(const QImage depthImage);
+    void OnDepthReady();
 
     /// Callback from Kinect processing thread.
     /// @note Do not call this from outside KinectModule.
-    void OnSkeletonReady(const QVariantMap skeletonData);
+    void OnSkeletonsReady();
 
     /// Callback from Kinect processing thread.
     /// @note Do not call this from outside KinectModule.
@@ -61,15 +70,15 @@ private slots:
 signals:
     /// Signal that is emitted from the Kinect processing thread.
     /// @note Do not connect to this signal, use KinectDevice instead.
-    void VideoReady(const QImage videoImage);
+    void VideoAlert();
 
     /// Signal that is emitted from the Kinect processing thread.
     /// @note Do not connect to this signal, use KinectDevice instead.
-    void DepthReady(const QImage depthImage);
+    void DepthAlert();
 
     /// Signal that is emitted from the Kinect processing thread.
     /// @note Do not connect to this signal, use KinectDevice instead.
-    void SkeletonReady(const QVariantMap skeletonData);
+    void SkeletonsAlert();
 
     /// Signal that is emitted from the Kinect processing thread.
     /// @note Do not connect to this signal, use KinectDevice instead.
@@ -95,8 +104,6 @@ private:
     /// @note This function does nothing if debugging_ is false.
     void DrawDebugSkeletons();
 
-    static std::string module_name_;
-
     HANDLE kinectProcess_;
     HANDLE kinectDepthStream_;
     HANDLE kinectVideoStream_;
@@ -105,6 +112,9 @@ private:
     HANDLE eventDepthFrame_;
     HANDLE eventVideoFrame_;
     HANDLE eventSkeletonFrame_;
+
+    INuiSensor *kinectSensor_;
+    BSTR kinectName_;
 
     KinectHelper helper_;
     KinectDevice *tundraKinectDevice_;
@@ -116,10 +126,16 @@ private:
     QSize videoSize_;
     QSize depthSize_;
 
-    bool kinectApiInitialized_;
+    QMutex mutexVideo_;
+    QMutex mutexDepth_;
+    QMutex mutexSkeleton_;
+
+    QImage video_;
+    QImage depth_;
+    QList<KinectSkeleton*> skeletons_;
 
     /// Set this to true if you want to see debug widgets and prints.
     bool debugging_;
 
-    QList<QVariantMap > debugSkeletons_;
+    QString LC;
 };

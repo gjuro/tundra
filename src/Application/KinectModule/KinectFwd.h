@@ -1,11 +1,10 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
-#ifndef incl_KinectModule_KinectFwd_h
-#define incl_KinectModule_KinectFwd_h
+#pragma once
 
-namespace Foundation { class Framework; }
+#include "FrameworkFwd.h"
+#include "JavascriptFwd.h"
 
 class KinectHelper;
 class KinectDevice;
-
-#endif
+class KinectSkeleton;

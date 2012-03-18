@@ -1,9 +1,6 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
-#include "StableHeaders.h"
 #include "KinectHelper.h"
-
-#include <QDebug>
 
 KinectHelper::KinectHelper()
 {
@@ -11,83 +8,6 @@ KinectHelper::KinectHelper()
 
 KinectHelper::~KinectHelper()
 {
-}
-
-QVariantMap KinectHelper::ParseSkeletonData(int skeletonIndex, NUI_SKELETON_DATA skeletonData)
-{
-    QVariantMap data;
-
-    data["tracking-id"] = (unsigned int)skeletonData.dwTrackingID;
-    data["enrollment-index"] = (unsigned int)skeletonData.dwEnrollmentIndex;
-    data["user-index"] = (unsigned int)skeletonData.dwUserIndex;
-    
-    data["skeleton-index"] = (unsigned int)skeletonIndex;
-    data["skeleton-position"] = ConvertVector4ToQVector4D(skeletonData.Position);
-
-    for (int i=0; i < NUI_SKELETON_POSITION_COUNT; ++i)
-        data[ConvertBoneIndexToId(i)] = ConvertVector4ToQVector4D(skeletonData.SkeletonPositions[i]);
-
-    return data;
-}
-
-QVector4D KinectHelper::ConvertVector4ToQVector4D(::Vector4 kinectVector)
-{
-    QVector4D v;
-    v.setX(kinectVector.x);
-    v.setY(kinectVector.y);
-    v.setZ(kinectVector.z);
-    v.setW(kinectVector.w);
-    return v;
-}
-
-QString KinectHelper::ConvertBoneIndexToId(int index)
-{
-    QString base = "bone-";
-    switch (index)
-    {
-        case NUI_SKELETON_POSITION_HIP_CENTER:
-            return base + "hip-center";
-        case NUI_SKELETON_POSITION_SPINE:
-            return base + "spine";
-        case NUI_SKELETON_POSITION_SHOULDER_CENTER:
-            return base + "shoulder-center";
-        case NUI_SKELETON_POSITION_HEAD:
-            return base + "head";
-        case NUI_SKELETON_POSITION_SHOULDER_LEFT:
-            return base + "shoulder-left";
-        case NUI_SKELETON_POSITION_ELBOW_LEFT:
-            return base + "elbow-left";
-        case NUI_SKELETON_POSITION_WRIST_LEFT:
-            return base + "wrist-left";
-        case NUI_SKELETON_POSITION_HAND_LEFT:
-            return base + "hand-left";
-        case NUI_SKELETON_POSITION_SHOULDER_RIGHT:
-            return base + "shoulder-right";
-        case NUI_SKELETON_POSITION_ELBOW_RIGHT:
-            return base + "elbow-right";
-        case NUI_SKELETON_POSITION_WRIST_RIGHT:
-            return base + "wrist-right";
-        case NUI_SKELETON_POSITION_HAND_RIGHT:
-            return base + "hand-right";
-        case NUI_SKELETON_POSITION_HIP_LEFT:
-            return base + "hip-left";
-        case NUI_SKELETON_POSITION_KNEE_LEFT:
-            return base + "knee-left";
-        case NUI_SKELETON_POSITION_ANKLE_LEFT:
-            return base + "ankle-left";
-        case NUI_SKELETON_POSITION_FOOT_LEFT:
-            return base + "foot-left";
-        case NUI_SKELETON_POSITION_HIP_RIGHT:
-            return base + "hip-right";
-        case NUI_SKELETON_POSITION_KNEE_RIGHT:
-            return base + "knee-right";
-        case NUI_SKELETON_POSITION_ANKLE_RIGHT:
-            return base + "ankle-right";
-        case NUI_SKELETON_POSITION_FOOT_RIGHT:
-            return base + "foot-right";
-        default:
-            return base + "unknown-" + QString::number(index);
-    }
 }
 
 RGBQUAD KinectHelper::ConvertDepthShortToQuad(USHORT s)
@@ -161,18 +81,13 @@ RGBQUAD KinectHelper::ConvertDepthShortToQuad(USHORT s)
     return q;
 }
 
-void KinectHelper::ConnectBones(QPainter *p, QRectF pRect, QVariant vec1, QVariant vec2)
+void KinectHelper::ConnectBones(QPainter *p, QRectF pRect, float4 vec1, float4 vec2)
 {
-    if (!vec1.canConvert<QVector4D>() || !vec2.canConvert<QVector4D>())
-        return;
+    vec1 *= 200;
+    QPointF pos1 = pRect.center() + QPointF(vec1.x, vec1.y);
 
-    QVector4D qvec1 = qvariant_cast<QVector4D>(vec1);
-    qvec1 *= 200;
-    QPointF pos1 = pRect.center() + qvec1.toPointF();
-
-    QVector4D qvec2 = qvariant_cast<QVector4D>(vec2);
-    qvec2 *= 200;
-    QPointF pos2 = pRect.center() + qvec2.toPointF();
+    vec2 *= 200;
+    QPointF pos2 = pRect.center() + QPointF(vec2.x, vec2.y);
 
     p->drawLine(pos1, pos2);
 }

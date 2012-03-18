@@ -1,32 +1,38 @@
 
-# Configure KinectSDK, additional dependency for this project.
 macro (configure_kinect)
     if (WIN32 AND VC100)
         message ("** Configuring KINECT")
-        
-        # If your kinect sdk is not found set KINECT_ROOT to your installation
+        message (STATUS "Looking for Microsoft Kinect for Windows SDK 1.0")
+
+        # Setup the find paths for Microsoft Kinect for Windows 1.0.
+        # These are the default paths for the installer, user cannot change them.
         set (_KINECT_FIND_PATHS 
-            "$ENV{KINECT_ROOT}/inc"
-            "$ENV{KINECT_ROOT}/lib"
-            "C:/Program Files (x86)/Microsoft*Kinect*/inc"
-            "C:/Program Files (x86)/Microsoft*Kinect*/lib"
-            "C:/Program Files/Microsoft*Kinect*/inc"
-            "C:/Program Files/Microsoft*Kinect*/lib"
+            "C:/Program Files/Microsoft SDKs/Kinect/v1.0/inc"
+            "C:/Program Files/Microsoft SDKs/Kinect/v1.0/lib/x86"
+            "C:/Program Files/Microsoft SDKs/Kinect/v1.0/lib/amd64"
+            "C:/Program Files (x86)/Microsoft SDKs/Kinect/v1.0/inc"
+            "C:/Program Files (x86)/Microsoft SDKs/Kinect/v1.0/lib/x86"
+            "C:/Program Files (x86)/Microsoft SDKs/Kinect/v1.0/lib/amd64"
         )
         
-        find_path (KINECT_INCLUDE_DIRS MSR_NuiApi.h PATHS ${_KINECT_FIND_PATHS})   
-        find_path (KINECT_LIBRARY_DIRS MSRKinectNUI.lib PATHS ${_KINECT_FIND_PATHS})
-        find_library (KINECT_LIBRARIES MSRKinectNUI PATHS ${_KINECT_FIND_PATHS})
-        set (KINECT_RUNTIME_DIR ${KINECT_LIBRARY_DIRS}/..)
+        find_path (KINECT_INCLUDE_DIRS NuiApi.h PATHS ${_KINECT_FIND_PATHS})   
+        find_path (KINECT_LIBRARY_DIRS Kinect10.lib PATHS ${_KINECT_FIND_PATHS})
+        find_library (KINECT_LIBRARIES Kinect10 PATHS ${_KINECT_FIND_PATHS})
 
         if (${KINECT_INCLUDE_DIRS} STREQUAL "KINECT_INCLUDE_DIRS-NOTFOUND" OR
             ${KINECT_LIBRARY_DIRS} STREQUAL "KINECT_LIBRARY_DIRS-NOTFOUND" OR
             ${KINECT_LIBRARIES} STREQUAL "KINECT_LIBRARIES-NOTFOUND")
-            message (WARNING "-- Could not automatically find Microsoft Kinect SDK, set KINECT_ROOT to your install directory.")
+            message (FATAL_ERROR "-- Could not automatically find Microsoft Kinect for Windows SDK.")
         endif ()
-        
-        message (STATUS "")
-        sagase_configure_report (KINECT)
+
+        # Report findings
+        message (STATUS "-- Include Directories:")
+        message (STATUS "       " ${KINECT_INCLUDE_DIRS})
+        message (STATUS "-- Library Directories:")
+        message (STATUS "       " ${KINECT_LIBRARY_DIRS})
+        message (STATUS "-- Libraries:")
+        message (STATUS "       " ${KINECT_LIBRARIES})
+        message ("")
     endif ()    
 endmacro ()
 
@@ -57,27 +63,20 @@ if (WIN32 AND VC100)
 
     add_definitions (-DKINECT_MODULE_EXPORTS)
 
-    use_core_modules (Framework OgreRenderingModule)
+    use_core_modules (Framework Math OgreRenderingModule)
+    use_app_modules (JavascriptModule)
     use_package (KINECT)
     
     build_library (${TARGET_NAME} SHARED ${SOURCE_FILES} ${MOC_SRCS} ${UI_SRCS} ${RESOURCE_SRCS})
 
-    link_modules (Framework OgreRenderingModule)
+    link_modules (Framework Math OgreRenderingModule JavascriptModule)
     link_package (KINECT)
     
-    SetupCompileFlagsWithPCH()
+    SetupCompileFlags()
 
     final_target ()
-    
-    # Kinect module install requires some DLLs from the SDK
-    if (WIN32)
-        setup_install_files_find(${KINECT_RUNTIME_DIR} "MSRKINECTNUI.DLL" Release|RelWithDebInfo|Debug)
-        setup_install_files_find(${KINECT_RUNTIME_DIR} "KINECTSQM.DLL" Release|RelWithDebInfo|Debug)
-        setup_install_files_find(${KINECT_RUNTIME_DIR} "SQMAPI.DLL" Release|RelWithDebInfo|Debug)
-    endif()
 endif ()
 
-if (UNIX OR VC90)
-    message (WARNING "KinectModule can only be included in Windows with a VC100 compiler build at the moment.")
-    message (WARNING "Try cmake_vs2010.bat with Visual Studio 2010 installed to enable kinect functionality.")
+if (APPLE OR UNIX OR VC90)
+    message (FATAL_ERROR "KinectModule can only be included in Windows with a VC100 compiler build at the moment. Try cmake_vs2010.bat with Visual Studio 2010 installed to enable kinect functionality.")
 endif ()

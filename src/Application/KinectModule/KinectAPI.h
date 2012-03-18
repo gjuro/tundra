@@ -1,7 +1,6 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
-#ifndef incl_KinectModule_KinectAPI_h
-#define incl_KinectModule_KinectAPI_h
+#pragma once
 
 #if defined (_WINDOWS)
 #if defined(KINECT_MODULE_EXPORTS) 
@@ -12,5 +11,3 @@
 #else
 #define KINECT_VOIP_MODULE_API
 #endif
-
-#endif // incl_MumbleVoipModuleApi_h

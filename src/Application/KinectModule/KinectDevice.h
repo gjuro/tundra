@@ -1,19 +1,19 @@
-// For conditions of distribution and use, see copyright notice in license.txt
+// For conditions of distribution and use, see copyright notice in LICENSE
 
 #pragma once
 
 #include "KinectAPI.h"
+#include "KinectFwd.h"
 
 #include <QObject>
 #include <QString>
 #include <QImage>
-#include <QVariantMap>
 
 /*! KinectDevice is the way to get data from a Microsoft Kinect device.
     The KinectModule reads all available data from the device and emits the Tundra/Qt style data with this device.
 
     You can acquire the Kinect device via Frameworks dynamic object with name "kinect" and connecting to the signals specified in this class:
-    VideoUpdate, DepthUpdate, SkeletonUpdate and TrackingSkeleton.
+    VideoUpdate, DepthUpdate, SkeletonUpdate and TrackingSkeletons.
 
     \code
     C++:
@@ -31,7 +31,7 @@
             {
                 QObject::connect(kinectPtr, SIGNAL(VideoUpdate(const QImage)), this, SLOT(OnKinectVideo(const QImage)));
                 QObject::connect(kinectPtr, SIGNAL(SkeletonUpdate(const QVariantMap)), this, SLOT(OnKinectSkeleton(const QVariantMap)));
-                QObject::connect(kinectPtr, SIGNAL(TrackingSkeleton(bool)), this, SLOT(OnKinectTrackingSkeleton(bool)));
+                QObject::connect(kinectPtr, SIGNAL(TrackingSkeletons(bool)), this, SLOT(OnKinectTrackingSkeleton(bool)));
             }
         }
 
@@ -44,7 +44,7 @@
         var isTrackingRightNow = kinect.IsTrackingSkeletons();
         kinect.VideoUpdate.connect(onKinectVideo);
         kinect.SkeletonUpdate.connect(onKinectSkeleton);
-        kinect.TrackingSkeleton.connect(onKinectTrackingSkeleton);
+        kinect.TrackingSkeletons.connect(onKinectTrackingSkeleton);
 
     Python:
         The KinectDevice class needs to be registered to PythonQt so the QObject is knows and can be used.
@@ -59,7 +59,7 @@ Q_OBJECT
 friend class KinectModule;
 
 public:
-    KinectDevice(QObject *parent);
+    KinectDevice(KinectModule *owner);
     ~KinectDevice();
 
 public slots:
@@ -67,38 +67,45 @@ public slots:
     /// @return bool True if currently tracking and emitting SkeletonUpdate signal, false if we lost the skeleton(s).
     bool IsTrackingSkeletons();
 
+    /// Return the last video image received from Kinect. Call this when you receive the VideoUpdate signal.
+    QImage VideoImage();
+
+    /// Return the last depth image received from Kinect. Call this when you receive the DepthUpdate signal.
+    QImage DepthImage();
+
 signals:
     /// Emitted when a new video image is received from Kinect.
-    /// @param QImage Most recent video frame.
-    void VideoUpdate(const QImage image);
+    /// Call VideoImage function to get the image data if you are interested in it.
+    void VideoUpdate();
     
     /// Emitted when a new depth image is received from Kinect.
-    /// @param QImage Most recent depth frame.
-    void DepthUpdate(const QImage image);
+    /// Call DepthImage function to get the image data if you are interested in it.
+    void DepthUpdate();
 
-    /// Emitted when a new skeleton data is received from Kinect.
-    /// @param QVariantMap QString to QVariant map of skeleton tracking data. Including all bone position and skeleton index (tracking max 2 skeletons).
-    /// @todo Document the id to value pairs properly so people can use this data without printing the map and making assumptions!
-    void SkeletonUpdate(const QVariantMap data);
+    /// Emitted when a skeletons tracking state changes. Connect to the skeletons signals here if the tracking is true.
+    /** \note Remember to track what skeleton ids you have already connected, this will fire multiple times with same skeleton!
+        Or disconnect always when tracking is false. */
+    void SkeletonStateChanged(bool tracking, KinectSkeleton *skeleton);
 
     /// Emitted when skeleton tracking is started or stopped. This can be handy for eg. reseting things when we lose skeleton tracking.
     /// @param bool True if currently tracking and emitting SkeletonUpdate signal, false if we lost the skeleton(s).
-    void TrackingSkeleton(bool tracking);
+    void TrackingSkeletons(bool tracking);
 
 protected:
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
-    void DoVideoUpdate(const QImage &image);
+    void EmitVideoUpdate();
 
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
-    void DoDepthUpdate(const QImage &image);
+    void EmitDepthUpdate();
 
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
-    void DoSkeletonUpdate(const QVariantMap &data);
+    void EmitSkeletonUpdate(KinectSkeleton *skeleton);
 
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
-    void SetSkeletonTracking(bool tracking);
+    void SetTrackingSkeletons(bool tracking);
 
 private:
-    bool isTrackingSkeletons_;
+    KinectModule *owner_;
 
+    bool isTrackingSkeletons_;
 };
