@@ -27,11 +27,15 @@ void KinectDevice::EmitDepthUpdate()
 
 void KinectDevice::EmitSkeletonUpdate(KinectSkeleton *skeleton)
 {
+    emit SkeletonUpdate(skeleton);
+}
+
+void KinectDevice::EmitSkeletonStateChanged(KinectSkeleton *skeleton)
+{
     if (!skeleton)
         return;
     if (!isTrackingSkeletons_)
         SetTrackingSkeletons(true);
-
     emit SkeletonStateChanged(skeleton->IsTracking(), skeleton);
 }
 

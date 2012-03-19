@@ -5,21 +5,26 @@
 #include "KinectModule.h"
 #include "KinectDevice.h"
 #include "KinectSkeleton.h"
+
 #include "Framework.h"
 #include "CoreDefines.h"
+#include "Profiler.h"
 #include "LoggingFunctions.h"
 
-#include <MMSystem.h>
+#include "JavascriptModule.h"
+#include "QScriptEngineHelpers.h"
 
-#include <QImage>
+#include "UiAPI.h"
+#include "UiMainWindow.h"
+
 #include <QMutexLocker>
-#include <QVariant>
-#include <QDebug>
-#include <QPainter>
-#include <QRectF>
 #include <QPair>
+#include <QPixmap>
 
 #include "MemoryLeakCheck.h"
+
+Q_DECLARE_METATYPE(KinectDevice*)
+Q_DECLARE_METATYPE(KinectSkeleton*)
 
 KinectModule::KinectModule() : 
     IModule("KinectModule"),
@@ -28,71 +33,95 @@ KinectModule::KinectModule() :
     kinectName_(0),
     videoSize_(640, 480),
     depthSize_(320, 240),
-    tundraKinectDevice_(0),
+    kinectDevice_(0),
     eventDepthFrame_(0),
     eventVideoFrame_(0),
     eventSkeletonFrame_(0),
     eventKinectProcessStop_(0),
     kinectProcess_(0),
-    videoPreviewLabel_(0),
-    depthPreviewLabel_(0),
-    skeletonPreviewLabel_(0),
-    debugging_(false) // Change to true to see debug widgets and prints
+    kinectWidget_(0)
 {
-    if (debugging_)
-    {
-        videoPreviewLabel_ = new QLabel();
-        videoPreviewLabel_->setWindowTitle("Kinect Video Preview");
-        depthPreviewLabel_ = new QLabel();
-        depthPreviewLabel_->setWindowTitle("Kinect Depth Preview");
-        skeletonPreviewLabel_ = new QLabel();
-        skeletonPreviewLabel_->setWindowTitle("Kinect Skeleton Preview");
-    }
-
-    // These signals are emitted from the processing thread, 
-    // so we need Qt::QueuedConnection to get it to the main thread
-    connect(this, SIGNAL(VideoAlert()), SLOT(OnVideoReady()), Qt::QueuedConnection);
-    connect(this, SIGNAL(DepthAlert()), SLOT(OnDepthReady()), Qt::QueuedConnection);
-    connect(this, SIGNAL(SkeletonsAlert()), SLOT(OnSkeletonsReady()), Qt::QueuedConnection);
-    connect(this, SIGNAL(SkeletonTracking(bool)), SLOT(OnSkeletonTracking(bool)), Qt::QueuedConnection);
+    drawBoneSides_ << "-left" 
+                   << "-right";
+    drawBonePairs_ << QPair<QString, QString>("hip", "knee")
+                   << QPair<QString, QString>("ankle", "knee")
+                   << QPair<QString, QString>("ankle", "foot")
+                   << QPair<QString, QString>("shoulder", "elbow")
+                   << QPair<QString, QString>("wrist", "elbow")
+                   << QPair<QString, QString>("wrist", "hand");
 }
 
 KinectModule::~KinectModule()
 {
-    SAFE_DELETE(videoPreviewLabel_);
-    SAFE_DELETE(depthPreviewLabel_);
-    SAFE_DELETE(skeletonPreviewLabel_);
 }
 
 void KinectModule::Initialize()
 {
+    if (framework_->IsHeadless())
+        return;
+
+    // Connect javascript engine creation.
+    JavascriptModule *javascriptModule = framework_->GetModule<JavascriptModule>();
+    if (javascriptModule)
+        connect(javascriptModule, SIGNAL(ScriptEngineCreated(QScriptEngine*)), SLOT(OnScriptEngineCreated(QScriptEngine*)));
+    else
+        LogWarning(LC + "JavascriptModule not present, KinectModule usage from scripts will be limited!");
+
+    // These signals are emitted from the processing thread, 
+    // so we need Qt::QueuedConnection to get them to the main thread.
+    connect(this, SIGNAL(VideoAlert()), SLOT(OnVideoReady()), Qt::QueuedConnection);
+    connect(this, SIGNAL(DepthAlert()), SLOT(OnDepthReady()), Qt::QueuedConnection);
+    connect(this, SIGNAL(SkeletonsAlert()), SLOT(OnSkeletonsReady()), Qt::QueuedConnection);
+    connect(this, SIGNAL(SkeletonTracking(bool)), SLOT(OnSkeletonTracking(bool)), Qt::QueuedConnection);
+
+    // Init control panel widget and menu item
+    kinectWidget_ = new QWidget();
+
+    kinectUi_.setupUi(kinectWidget_);
+    connect(kinectUi_.buttonStart, SIGNAL(clicked()), SLOT(StartKinect()));
+    connect(kinectUi_.buttonStop, SIGNAL(clicked()), SLOT(StopKinect()));
+
+    if (framework_->Ui()->MainWindow())
+    {
+        kinectWidget_->setWindowIcon(framework_->Ui()->MainWindow()->windowIcon());
+
+        QAction *controlPanelAction = framework_->Ui()->MainWindow()->AddMenuAction("Kinect", "Control Panel");
+        if (controlPanelAction)
+            connect(controlPanelAction, SIGNAL(triggered()), SLOT(OnShowControlPanel()));
+    }
+
     // Push max count of skeleton objects to internal list.
     for (int i = 0; i<NUI_SKELETON_COUNT; i++)
         skeletons_ << new KinectSkeleton();
 
-    StartKinect();
-
-    tundraKinectDevice_ = new KinectDevice(this);
-    if (GetFramework()->RegisterDynamicObject("kinect", tundraKinectDevice_))
-        LogInfo(LC + "-- Registered 'kinect' dynamic object to Framework");
+    kinectDevice_ = new KinectDevice(this);
+    framework_->RegisterDynamicObject("kinect", kinectDevice_);
 }
 
 void KinectModule::Uninitialize()
 {
+    if (framework_->IsHeadless())
+        return;
+
     foreach(KinectSkeleton *skeleton, skeletons_)
-    {
         if (skeleton)
             SAFE_DELETE(skeleton);
-    }
     skeletons_.clear();
 
     StopKinect();
 
-    SAFE_DELETE(tundraKinectDevice_);
+    SAFE_DELETE(kinectDevice_);
+    SAFE_DELETE(kinectWidget_);
 }
 
 bool KinectModule::HasKinect()
 {
+    if (framework_->IsHeadless())
+    {
+        LogError(LC + "You are calling HasKinect() in headless mode. Kinect is not supported in headless mode!");
+        return false;
+    }
+
     if (IsStarted())
         return true;
 
@@ -136,6 +165,12 @@ bool KinectModule::IsStarted()
 
 bool KinectModule::StartKinect()
 {
+    if (framework_->IsHeadless())
+    {
+        LogError(LC + "You are calling StartKinect() in headless mode. Kinect is not supported in headless mode!");
+        return false;
+    }
+
     if (!HasKinect())
     {
         LogError(LC + "Cannot start Kinect, no device available!");
@@ -191,7 +226,8 @@ bool KinectModule::StartKinect()
     // Precautionary null check
     if (!kinectSensor_)
     {
-        LogError(LC + "Kinect pointer after succesfull init is null?!");
+        LogError(LC + "Kinect sensor pointer after successful init is null?!");
+        StopKinect();
         return false;
     }
 
@@ -234,11 +270,19 @@ bool KinectModule::StartKinect()
     eventKinectProcessStop_ = CreateEventA(NULL, FALSE, FALSE, NULL);
     kinectProcess_ = CreateThread(NULL, 0, KinectProcessThread, this, 0, NULL);
 
+    UpdateControlPanelState();
+
     return true;
 }
 
 void KinectModule::StopKinect()
 {
+    if (framework_->IsHeadless())
+    {
+        LogError(LC + "You are calling StopKinect() in headless mode. Kinect is not supported in headless mode!");
+        return;
+    }
+
     // Stop the Kinect processing thread
     if (eventKinectProcessStop_ != NULL)
     {
@@ -289,9 +333,11 @@ void KinectModule::StopKinect()
         if (skeleton)
         {
             skeleton->ResetSkeleton();
-            skeleton->emitTrackingChange_ = false;
+            skeleton->emitTrackingChange = false;
         }
     }
+
+    UpdateControlPanelState();
 }
 
 QImage KinectModule::VideoImage()
@@ -306,44 +352,51 @@ QImage KinectModule::DepthImage()
     return depth_;
 }
 
+KinectDevice* KinectModule::Kinect()
+{
+    return kinectDevice_;
+}
+
 DWORD WINAPI KinectModule::KinectProcessThread(LPVOID pParam)
 {
-    KinectModule *pthis = (KinectModule*)pParam;
-    KinectHelper helper = pthis->helper_;
+    KinectModule *kinectModule = (KinectModule*)pParam;
 
-    HANDLE kinectEvents[4];
+    const int numEvents = 4;
+    HANDLE kinectEvents[numEvents];
     int eventIndex;
 
     // Configure events to be listened on
-    kinectEvents[0] = pthis->eventKinectProcessStop_;
-    kinectEvents[1] = pthis->eventDepthFrame_;
-    kinectEvents[2] = pthis->eventVideoFrame_;
-    kinectEvents[3] = pthis->eventSkeletonFrame_;
+    kinectEvents[0] = kinectModule->eventKinectProcessStop_;
+    kinectEvents[1] = kinectModule->eventDepthFrame_;
+    kinectEvents[2] = kinectModule->eventVideoFrame_;
+    kinectEvents[3] = kinectModule->eventSkeletonFrame_;
 
     // Main thread loop
     while(1)
     {
         // Wait for an event to be signaled
-        eventIndex = WaitForMultipleObjects(sizeof(kinectEvents) / sizeof(kinectEvents[0]), kinectEvents, FALSE, 100);
+        eventIndex = WaitForMultipleObjects(numEvents, kinectEvents, FALSE, 100);
+
+        // Thread stop event
         if (eventIndex == 0)
-            break;            
+            break;
 
         // Process signal events
         switch (eventIndex)
         {
             case 1:
             {          
-                pthis->GetDepth();
+                kinectModule->GetDepth();
                 break;
             }
             case 2:
             {
-                pthis->GetVideo();
+                kinectModule->GetVideo();
                 break;
             }
             case 3:
             {
-                pthis->GetSkeleton();
+                kinectModule->GetSkeleton();
                 break;
             }
             default:
@@ -395,19 +448,23 @@ void KinectModule::GetVideo()
 
 void KinectModule::OnVideoReady()
 {
-    // Lock video mutex if debugging before emitting data signal to 3rd party code.
-    if (debugging_ && videoPreviewLabel_)
+    PROFILE(KinectModule_Update_Color)
+    // Lock video mutex for preview before emitting data signal to 3rd party code.
+    if (kinectWidget_ && kinectWidget_->isVisible())
     {
+        PROFILE(Update_Control_Panel_Color_Image)
         QMutexLocker lock(&mutexVideo_);
-        if (videoPreviewLabel_->size() != video_.size())
-            videoPreviewLabel_->resize(video_.size());
-        if (!videoPreviewLabel_->isVisible())
-            videoPreviewLabel_->show();
-        videoPreviewLabel_->setPixmap(QPixmap::fromImage(video_));
+        if (video_.size() != kinectUi_.widgetColor->size())
+            kinectUi_.widgetColor->setPixmap(QPixmap::fromImage(video_.scaled(kinectUi_.widgetColor->size(), Qt::KeepAspectRatio)));
+        else
+            kinectUi_.widgetColor->setPixmap(QPixmap::fromImage(video_));
     }
 
-    if (tundraKinectDevice_)
-        tundraKinectDevice_->EmitVideoUpdate();
+    if (kinectDevice_)
+    {
+        PROFILE(KinectDevice_EmitVideoUpdate)
+        kinectDevice_->EmitVideoUpdate();
+    }
 }
 
 void KinectModule::GetDepth()
@@ -436,7 +493,7 @@ void KinectModule::GetDepth()
         {
             for (int x=0; x<depthSize_.height(); x++)
             {
-                RGBQUAD pixelRgb = helper_.ConvertDepthShortToQuad(*pBufferRun);
+                RGBQUAD pixelRgb = ConvertDepthShortToQuad(*pBufferRun);
                 *rgbrun = pixelRgb;
 
                 pBufferRun++;
@@ -466,19 +523,23 @@ void KinectModule::GetDepth()
 
 void KinectModule::OnDepthReady()
 {
-    // Lock video mutex if debugging before emitting data signal to 3rd party code.
-    if (debugging_ && depthPreviewLabel_)
+    PROFILE(KinectModule_Update_Depth)
+    // Lock depth mutex for preview before emitting data signal to 3rd party code.
+    if (kinectWidget_ && kinectWidget_->isVisible())
     {
+        PROFILE(Update_Control_Panel_Depth_Image)
         QMutexLocker lock(&mutexDepth_);
-        if (depthPreviewLabel_->size() != depth_.size())
-            depthPreviewLabel_->resize(depth_.size());
-        if (!depthPreviewLabel_->isVisible())
-            depthPreviewLabel_->show();
-        depthPreviewLabel_->setPixmap(QPixmap::fromImage(depth_));
+        if (depth_.size() != kinectUi_.widgetDepth->size())
+            kinectUi_.widgetDepth->setPixmap(QPixmap::fromImage(depth_.scaled(kinectUi_.widgetDepth->size(), Qt::KeepAspectRatio)));
+        else
+            kinectUi_.widgetDepth->setPixmap(QPixmap::fromImage(depth_));
     }
 
-    if (tundraKinectDevice_)
-        tundraKinectDevice_->EmitDepthUpdate();
+    if (kinectDevice_)
+    {
+        PROFILE(KinectDevice_EmitDepthUpdate)
+        kinectDevice_->EmitDepthUpdate();
+    }
 }
 
 void KinectModule::GetSkeleton()
@@ -502,7 +563,7 @@ void KinectModule::GetSkeleton()
     // to eg. reset things when skeleton tracking is lost
     if (!foundSkeletons)
     {
-        if (tundraKinectDevice_ && tundraKinectDevice_->IsTrackingSkeletons())
+        if (kinectDevice_ && kinectDevice_->IsTrackingSkeletons())
             emit SkeletonTracking(false);
         return;
     }
@@ -514,7 +575,7 @@ void KinectModule::GetSkeleton()
         return;
 
     // Inform 3rd party code that tracking is now enabled.
-    if (tundraKinectDevice_ && !tundraKinectDevice_->IsTrackingSkeletons())
+    if (kinectDevice_ && !kinectDevice_->IsTrackingSkeletons())
         emit SkeletonTracking(true);
 
     // Lock skeletons and update
@@ -546,16 +607,14 @@ void KinectModule::GetSkeleton()
 
 void KinectModule::OnSkeletonTracking(bool tracking)
 {
-    tundraKinectDevice_->SetTrackingSkeletons(tracking);
-
-    if (debugging_)
-        LogInfo(LC + "Tracking Skeletons    " + (tracking ? "ON" : "OFF"));
+    kinectDevice_->SetTrackingSkeletons(tracking);
 }
 
 void KinectModule::OnSkeletonsReady()
 {
-    if (debugging_)
-        DrawDebugSkeletons();
+    PROFILE(KinectModule_Update_Skeleton)
+
+    DrawSkeletons();
 
     QMutexLocker lock(&mutexSkeleton_);
     foreach(KinectSkeleton *skeleton, skeletons_)
@@ -563,48 +622,103 @@ void KinectModule::OnSkeletonsReady()
         if (!skeleton)
             continue;
 
-        // This step will let 3rd party code (scripts) to hook to the skeleton ptr signals.
-        // Only emit this signal when state changes. 3rd party code needs to do some book keeping
-        // to know if the ID of the skeleton has already been connected or not.
-        if (skeleton->emitTrackingChange_)
-            tundraKinectDevice_->EmitSkeletonUpdate(skeleton);
+        if (skeleton->emitTrackingChange)
+        {
+            // Signal skeleton tracking change from device and the skeleton itself.
+            PROFILE(KinectDevice_EmitSkeletonStateChanged)
+            kinectDevice_->EmitSkeletonStateChanged(skeleton);
+            PROFILE(KinectSkeleton_EmitTrackingChanged)
+            skeleton->EmitTrackingChanged();
+        }
 
-        // This makes the skeleton emit tracking changes if one occurred, true or false as the param.
-        skeleton->EmitIfTrackingChanged();
-
-        // This makes the skeleton emit the updated signal that 3rd party code needs to catch and
-        // if the code so chooses it can get bone positions etc. data with the designated slots/properties.
-        skeleton->EmitIfUpdated();
+        if (skeleton->IsUpdated())
+        {
+            // Signal skeleton bone positions updated from device and skeleton itself.
+            PROFILE(KinectDevice_EmitSkeletonUpdate)
+            kinectDevice_->EmitSkeletonUpdate(skeleton);
+            PROFILE(KinectSkeleton_EmitUpdated)
+            skeleton->EmitUpdated();
+        }
     }
 }
 
-void KinectModule::DrawDebugSkeletons()
+void KinectModule::OnShowControlPanel()
 {
-    if (!debugging_)
+    if (!kinectWidget_)
         return;
 
-    QRectF imgRect(0, 0, 640, 480);
-    QSize imgSize = imgRect.size().toSize();
-    QImage manipImage(imgSize, QImage::Format_RGB32);
+    if (kinectWidget_->isVisible())
+    {
+        QApplication::setActiveWindow(kinectWidget_);
+        kinectWidget_->setFocus();
+        return;
+    }
 
-    QPainter p(&manipImage);
+    kinectWidget_->show();
+    UpdateControlPanelState();
+}
+
+void KinectModule::UpdateControlPanelState()
+{
+    if (!kinectWidget_)
+        return;
+
+    if (!HasKinect())
+    {
+        kinectUi_.labelStatus->setText("<span style=\"color:red;\">No Kinect devices detected on the machine</span>");
+        kinectUi_.buttonStart->setEnabled(false);
+        kinectUi_.buttonStop->setEnabled(false);
+        ResetControlPanelRendering();
+    }
+    else
+    {
+        if (!IsStarted())
+        {
+            kinectUi_.labelStatus->setText("Kinect device available");
+            kinectUi_.buttonStart->setEnabled(true);
+            kinectUi_.buttonStop->setEnabled(false);
+            ResetControlPanelRendering();
+        }
+        else
+        {
+            kinectUi_.labelStatus->setText("Kinect device running");
+            kinectUi_.buttonStart->setEnabled(false);
+            kinectUi_.buttonStop->setEnabled(true);
+        }
+    }
+}
+
+void KinectModule::ResetControlPanelRendering()
+{
+    if (!kinectWidget_)
+        return;
+
+    // All are same size, just make one QPixmap
+    QPixmap blank(kinectUi_.widgetDepth->size());
+    blank.fill(Qt::black);
+
+    kinectUi_.widgetDepth->setPixmap(blank);
+    kinectUi_.widgetColor->setPixmap(blank);
+    kinectUi_.widgetSkeletons->setPixmap(blank);
+}
+
+void KinectModule::DrawSkeletons()
+{
+    PROFILE(Update_Control_Panel_Skeleton_Image)
+    if (!kinectWidget_ || !kinectWidget_->isVisible())
+        return;  
+
+    QRect imgRect(0, 0, kinectUi_.widgetSkeletons->width(), kinectUi_.widgetSkeletons->height());
+    QImage skeletonImage(imgRect.size(), QImage::Format_RGB32);
+
+    QPen pen(Qt::SolidLine);
+    QPainter p(&skeletonImage);
     p.setPen(Qt::black);
-    p.setBrush(QBrush(Qt::white));
-    p.drawRect(imgRect);
+    p.setBrush(QBrush(Qt::black));
+    p.drawRect(imgRect);    
 
     {
         QMutexLocker lock(&mutexSkeleton_);
-
-        QList<QPair<QString, QString> > bonePairs;
-        bonePairs << QPair<QString, QString>("hip", "knee");
-        bonePairs << QPair<QString, QString>("ankle", "knee");
-        bonePairs << QPair<QString, QString>("ankle", "foot");
-        bonePairs << QPair<QString, QString>("shoulder", "elbow");
-        bonePairs << QPair<QString, QString>("wrist", "elbow");
-        bonePairs << QPair<QString, QString>("wrist", "hand");
-
-        QStringList sides;
-        sides << "-left" << "-right";
 
         int skeletonIndex = 0;
         foreach(KinectSkeleton *skeleton, skeletons_)
@@ -614,32 +728,39 @@ void KinectModule::DrawDebugSkeletons()
             if (!skeleton->IsTracking())
                 continue;
 
+            // Support different colors for 6 unique skeletons
+            // that is the maximum for the Kinect.
             if (skeletonIndex == 0)
-                p.setBrush(QBrush(Qt::red));
-            else if (skeletonIndex == 1)
                 p.setBrush(QBrush(Qt::blue));
-            else if (skeletonIndex == 3)
+            else if (skeletonIndex == 1)
+                p.setBrush(QBrush(Qt::red));
+            else if (skeletonIndex == 2)
                 p.setBrush(QBrush(Qt::green));
+            else if (skeletonIndex == 3)
+                p.setBrush(QBrush(Qt::yellow));
             else if (skeletonIndex == 4)
                 p.setBrush(QBrush(Qt::magenta));
+            else if (skeletonIndex == 5)
+                p.setBrush(QBrush(Qt::cyan));
 
             // Draw bone lines
-            QPen pen(Qt::SolidLine);
             pen.setWidth(3);
             pen.setBrush(p.brush()); 
             p.setPen(pen);
 
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-head"), skeleton->BonePosition("bone-shoulder-center"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-shoulder-center"), skeleton->BonePosition("bone-spine"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-hip-center"), skeleton->BonePosition("bone-spine"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-shoulder-left"), skeleton->BonePosition("bone-shoulder-center"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-shoulder-right"), skeleton->BonePosition("bone-shoulder-center"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-hip-center"), skeleton->BonePosition("bone-hip-left"));
-            helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-hip-center"), skeleton->BonePosition("bone-hip-right"));
+            QHash<QString, float4> boneData = skeleton->BonePositions();
 
-            foreach(QString side, sides)
-                for(int i=0; i < bonePairs.length(); ++i)
-                    helper_.ConnectBones(&p, imgRect, skeleton->BonePosition("bone-" + bonePairs[i].first + side), skeleton->BonePosition("bone-" + bonePairs[i].second + side));
+            ConnectBones(&p, imgRect, boneData["bone-head"], boneData["bone-shoulder-center"]);
+            ConnectBones(&p, imgRect, boneData["bone-shoulder-center"], boneData["bone-spine"]);
+            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-spine"]);
+            ConnectBones(&p, imgRect, boneData["bone-shoulder-left"], boneData["bone-shoulder-center"]);
+            ConnectBones(&p, imgRect, boneData["bone-shoulder-right"], boneData["bone-shoulder-center"]);
+            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-hip-left"]);
+            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-hip-right"]);
+
+            foreach(QString side, drawBoneSides_)
+                for(int i=0; i < drawBonePairs_.length(); ++i)
+                    ConnectBones(&p, imgRect, boneData["bone-" + drawBonePairs_[i].first + side], boneData["bone-" + drawBonePairs_[i].second + side]);
 
             // Draw bone positions
             pen.setWidth(1);
@@ -648,7 +769,7 @@ void KinectModule::DrawDebugSkeletons()
 
             foreach(QString boneName, skeleton->BoneNames())
             {
-                float4 vec = skeleton->BonePosition(boneName);
+                float4 vec = boneData[boneName];
                 vec *= 200;
                 QPointF pos(vec.x, vec.y);
 
@@ -664,9 +785,96 @@ void KinectModule::DrawDebugSkeletons()
 
     p.end();
 
-    skeletonPreviewLabel_->resize(imgSize);
-    skeletonPreviewLabel_->show();
-    skeletonPreviewLabel_->setPixmap(QPixmap::fromImage(manipImage.mirrored(false, true))); // Need to do a vertical flip for some reason
+    // Flip image and draw to the widget
+    kinectUi_.widgetSkeletons->setPixmap(QPixmap::fromImage(skeletonImage.mirrored(false, true)));
+}
+
+RGBQUAD KinectModule::ConvertDepthShortToQuad(USHORT s)
+{
+    USHORT RealDepth = (s & 0xfff8) >> 3;
+    USHORT Player = s & 7;
+
+    // transform 13-bit depth information into an 8-bit intensity appropriate
+    // for display (we disregard information in most significant bit)
+    BYTE l = 255 - (BYTE)(256*RealDepth/0x0fff);
+
+    RGBQUAD q;
+    q.rgbRed = q.rgbBlue = q.rgbGreen = 0;
+
+    switch( Player )
+    {
+        case 0:
+        {
+            q.rgbRed = l / 2;
+            q.rgbBlue = l / 2;
+            q.rgbGreen = l / 2;
+            break;
+        }
+        case 1:
+        {
+            q.rgbRed = l;
+            break;
+        }
+        case 2:
+        {
+            q.rgbGreen = l;
+            break;
+        }
+        case 3:
+        {
+            q.rgbRed = l / 4;
+            q.rgbGreen = l;
+            q.rgbBlue = l;
+            break;
+        }
+        case 4:
+        {
+            q.rgbRed = l;
+            q.rgbGreen = l;
+            q.rgbBlue = l / 4;
+            break;
+        }
+        case 5:
+        {
+            q.rgbRed = l;
+            q.rgbGreen = l / 4;
+            q.rgbBlue = l;
+            break;
+        }
+        case 6:
+        {
+            q.rgbRed = l / 2;
+            q.rgbGreen = l / 2;
+            q.rgbBlue = l;
+            break;
+        }
+        case 7:
+        {    
+            q.rgbRed = 255 - ( l / 2 );
+            q.rgbGreen = 255 - ( l / 2 );
+            q.rgbBlue = 255 - ( l / 2 );
+            break;
+        }
+    }
+
+    return q;
+}
+
+void KinectModule::ConnectBones(QPainter *p, QRectF pRect, float4 vec1, float4 vec2)
+{
+    vec1 *= 200;
+    QPointF pos1 = pRect.center() + QPointF(vec1.x, vec1.y);
+
+    vec2 *= 200;
+    QPointF pos2 = pRect.center() + QPointF(vec2.x, vec2.y);
+
+    p->drawLine(pos1, pos2);
+}
+
+void KinectModule::OnScriptEngineCreated(QScriptEngine *engine)
+{
+    qScriptRegisterQObjectMetaType<KinectDevice*>(engine);
+    qScriptRegisterQObjectMetaType<KinectSkeleton*>(engine);
 }
 
 extern "C"

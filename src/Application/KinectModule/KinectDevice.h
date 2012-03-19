@@ -9,48 +9,74 @@
 #include <QString>
 #include <QImage>
 
-/*! KinectDevice is the way to get data from a Microsoft Kinect device.
-    The KinectModule reads all available data from the device and emits the Tundra/Qt style data with this device.
+/** KinectDevice is the way to get data from a connected Microsoft Kinect device on the machine.
+    
+    \section KinectDeviceFeatures KinectDevice features
 
-    You can acquire the Kinect device via Frameworks dynamic object with name "kinect" and connecting to the signals specified in this class:
-    VideoUpdate, DepthUpdate, SkeletonUpdate and TrackingSkeletons.
+    In assistance with KinectModule KinectModule reads and processes the Kinect device data in a separate thread.
+    Once the data hits the main thread this KinectDevice emits notification signals VideoUpdate, DepthUpdate,
+    SkeletonStateChanged and TrackingSkeletons. If you are interested in the particular signals data you can 
+    retrieve it with the slots VideoImage, DepthImage and the slots in the KinectSkeleton class.
+
+    Also see these slots HasKinect, IsStarted, StartKinect and StopKinect.
+
+    Not emitting the data with the signals is design decision that was made keeping and eye for Tundra scripting.
+    These signals will fire often and we want to avoid resolving and casting any data in the signals as it can
+    get fairly heavy, depending on the data. In our case it would be QImages and KinectSkeleton class with high FPS.
+    It is better to have designated slots to only get the data when your script is interested in it.
+
+    \section KinectDeviceUsage Acquiring and using KinectDevice
+
+    You can acquire the Kinect device via Frameworks dynamic object with name "kinect".
+    This object is auto exposed to JavaScript as kinect. It is not recommended to get the 
+    KinectModule directly and interact with it even if it is a QObject, it is for internal use only.
 
     \code
+    JavaScript:
+        var debugLabel = new QLabel();
+        // All framework dynamic objects are automatically visible in JavaScript.
+        if (kinect == null) 
+        {
+            console.LogWarning("Kinect module not present, oops!");
+            return;
+        }
+        if (kinect.HasKinect())
+        {
+            kinect.VideoUpdate.connect(OnKinectVideoUpdate);
+            kinect.DepthUpdate.connect(OnKinectDepthUpdate);
+            if (!kinect->StartKinect())
+                console.LogError("Failed to start Kinect device");
+            else
+                debugLabel.visible = true;
+        }
+        else
+            console.LogError("No Kinect device available on the machine!");
+
+
+        function OnKinectVideoUpdate()
+        {
+            debugLabel.pixmap = QPixmap.fromImage(kinect.VideoImage());
+        }
+
     C++:
-        // In C++ framework properties are a bit inconvenient, but available non the less.
-        QVariant kinectVariant = GetFramework()->property("kinect");
-        if (kinectVariant.isNull())
+        KinectModule *kinectModule = GetFramework()->GetModule<KinectModule*>().get();
+        if (!kinectModule)
         {
             LogWarning("Kinect module not present, oops!");
             return;
         }
-        if (kinectVariant.canConvert<QObject*>())
+        KinectDevice *kinect = kinectModule->Kinect();
+        if (kinect->HasKinect())
         {
-            QObject *kinectPtr = kinectVariant.value<QObject*>();
-            if (kinectPtr)
-            {
-                QObject::connect(kinectPtr, SIGNAL(VideoUpdate(const QImage)), this, SLOT(OnKinectVideo(const QImage)));
-                QObject::connect(kinectPtr, SIGNAL(SkeletonUpdate(const QVariantMap)), this, SLOT(OnKinectSkeleton(const QVariantMap)));
-                QObject::connect(kinectPtr, SIGNAL(TrackingSkeletons(bool)), this, SLOT(OnKinectTrackingSkeleton(bool)));
-            }
+            connect(kinect, SIGNAL(VideoUpdate()), this, SLOT(OnKinectVideoUpdate()));
+            connect(kinect, SIGNAL(DepthUpdate()), this, SLOT(OnKinectDepthUpdate()));
+            if (!kinect->StartKinect())
+                LogError("Failed to start Kinect device");
         }
-
-    JavaScript:
-        // All framework dynamic objects are automatically visible in JavaScript.
-        if (kinect == null) {
-            print("Kinect module not present, oops!");
-            return;
-        }
-        var isTrackingRightNow = kinect.IsTrackingSkeletons();
-        kinect.VideoUpdate.connect(onKinectVideo);
-        kinect.SkeletonUpdate.connect(onKinectSkeleton);
-        kinect.TrackingSkeletons.connect(onKinectTrackingSkeleton);
-
-    Python:
-        The KinectDevice class needs to be registered to PythonQt so the QObject is knows and can be used.
-        This is not done yet so python access is not working yet.
+        else
+            LogError("No Kinect device available on the machine!");
     \endcode
- */
+*/
 class KINECT_VOIP_MODULE_API KinectDevice : public QObject
 {
 
@@ -76,7 +102,8 @@ public slots:
     void StopKinect();
 
     /// Get current skeleton tracking state.
-    /// @return bool True if currently tracking and emitting SkeletonUpdate signal, false if we lost the skeleton(s).
+    /** @return bool True if currently tracking any skeletons. Use SkeletonStateChanged 
+        and its KinectSkeleton parameter to hook to its signals */
     bool IsTrackingSkeletons();
 
     /// Return the last video image received from Kinect. Call this when you receive the VideoUpdate signal.
@@ -94,6 +121,9 @@ signals:
     /// Call DepthImage function to get the image data if you are interested in it.
     void DepthUpdate();
 
+    /// Emitted when skeleton received an update.
+    void SkeletonUpdate(KinectSkeleton *skeleton);
+
     /// Emitted when a skeletons tracking state changes. Connect to the skeletons signals here if the tracking is true.
     /** \note Remember to track what skeleton ids you have already connected, this will fire multiple times with same skeleton!
         Or disconnect always when tracking is false. */
@@ -102,6 +132,8 @@ signals:
     /// Emitted when skeleton tracking is started or stopped. This can be handy for eg. reseting things when we lose skeleton tracking.
     /// @param bool True if currently tracking and emitting SkeletonUpdate signal, false if we lost the skeleton(s).
     void TrackingSkeletons(bool tracking);
+
+/// @cond PRIVATE
 
 protected:
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
@@ -114,7 +146,12 @@ protected:
     void EmitSkeletonUpdate(KinectSkeleton *skeleton);
 
     /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
+    void EmitSkeletonStateChanged(KinectSkeleton *skeleton);
+
+    /// This function gets called by KinectModule when its outside the Kinect processing thread, do not call this from 3rd party code!
     void SetTrackingSkeletons(bool tracking);
+
+/// @endcond
 
 private:
     KinectModule *owner_;

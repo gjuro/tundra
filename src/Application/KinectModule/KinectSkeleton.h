@@ -2,10 +2,13 @@
 
 #pragma once
 
+#include "KinectAPI.h"
+
 #include <QObject>
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QMutex>
 
 #include "Win.h"
 #include <NuiApi.h>
@@ -13,20 +16,29 @@
 #include "Math/float3.h"
 #include "Math/float4.h"
 
-class KinectSkeleton : public QObject
+/** KinectSkeleton is accessed by both the Kinect processing thread and the main thread
+    so its data getters and setters are protected with mutexes. */
+class KINECT_VOIP_MODULE_API KinectSkeleton : public QObject
 {
 
 Q_OBJECT
 
-/// This property is true if tracking and this object has skeleton positions etc.
+/// True if tracking and this object has skeleton positions etc.
 Q_PROPERTY(bool tracking READ IsTracking)
+
+/// True is skeleton has been updated. This is true when Updated signal fires and changes to false after it.
+Q_PROPERTY(bool updated READ IsUpdated)
 
 /// All valid bone names. You can use these to fetch bone float4 object.
 Q_PROPERTY(QStringList boneNames READ BoneNames)
 
-/// Various id information about the skeleton.
+/// Skeleton tracking id.
 Q_PROPERTY(uint trackingId READ TrackingId)
+
+/// Skeleton enrollment index.
 Q_PROPERTY(uint enrollmentIndex READ EnrollmentIndex)
+
+/// User index.
 Q_PROPERTY(uint userIndex READ UserIndex)
 
 /// Main position of the skeleton.
@@ -36,10 +48,11 @@ public:
     KinectSkeleton();
     ~KinectSkeleton();
 
-    bool emitTrackingChange_;
-    bool updated_;
+    bool emitTrackingChange;
+    bool updated;
 
     bool IsTracking();
+    bool IsUpdated();
     QStringList BoneNames();
 
     uint TrackingId();
@@ -48,6 +61,8 @@ public:
 
     float4 Position();
 
+    QHash<QString, float4> BonePositions();
+
     // Called from the Kinect processing thread.
     void UpdateSkeleton(const NUI_SKELETON_DATA &skeletonData);
 
@@ -55,10 +70,10 @@ public:
     void ResetSkeleton();
 
     // Must be called in the main thread!
-    void EmitIfUpdated();
+    void EmitUpdated();
 
     // Must be called in the main thread!
-    void EmitIfTrackingChanged();
+    void EmitTrackingChanged();
 
 public slots:
     float4 BonePosition(QString boneName);
@@ -84,5 +99,7 @@ private:
 
     float4 position_;
 
-    QHash<QString, float4> data_;
+    QMutex mutexData_;
+
+    QHash<QString, float4> bonePositions_;
 };
