@@ -1,0 +1,14 @@
+material kinect_example_face
+{
+	technique
+	{
+		pass
+		{
+            emissive 1 1 1 1
+			texture_unit
+			{
+				texture local://face.png
+		    }
+		}
+	}
+}

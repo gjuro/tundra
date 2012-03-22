@@ -4,6 +4,7 @@
 #include "LoggingFunctions.h"
 
 #include <QMutexLocker>
+#include <QDebug>
 
 KinectSkeleton::KinectSkeleton() :
     QObject(),
@@ -13,19 +14,25 @@ KinectSkeleton::KinectSkeleton() :
     trackingId_(0),
     enrollmentIndex_(0),
     userIndex_(0),
-    position_(float4(0,0,0,0))
+    position_(float4::zero)
 {
     for (int i=0; i<NUI_SKELETON_POSITION_COUNT; ++i)
     {
-        QString boneName = BoneIndexToName(i);
-        boneNames_.append(boneName);
-        bonePositions_[boneName] = float4(0,0,0,0);
+        std::string boneName = BoneIndexToName(i).toStdString();
+        if (boneName.empty())
+        {
+            LogError("[KinectSkeleton]: Error initializing skeleton bone data, invalid bone index " + QString::number(i));
+            continue;
+        }
+        boneNames_.push_back(boneName);
+        boneData_[boneName] = std::make_pair(NUI_SKELETON_POSITION_NOT_TRACKED, float4::zero);
     }
 }
 
 KinectSkeleton::~KinectSkeleton()
 {
-    bonePositions_.clear();
+    QMutexLocker lock(&mutexData_);
+    boneData_.clear();
     boneNames_.clear();
 }
 
@@ -43,8 +50,13 @@ bool KinectSkeleton::IsUpdated()
 
 QStringList KinectSkeleton::BoneNames()
 {
-    QMutexLocker lock(&mutexData_);
-    return boneNames_;
+    QStringList qBoneNames;
+    {
+        QMutexLocker lock(&mutexData_);
+        for(int i=0; i<boneNames_.size(); ++i)
+            qBoneNames << QString::fromStdString(boneNames_[i]);
+    }
+    return qBoneNames;
 }
 
 uint KinectSkeleton::TrackingId()
@@ -71,10 +83,10 @@ float4 KinectSkeleton::Position()
     return position_;
 }
 
-QHash<QString, float4> KinectSkeleton::BonePositions()
+BoneDataMap KinectSkeleton::BoneData()
 {
     QMutexLocker lock(&mutexData_);
-    return bonePositions_;
+    return boneData_;
 }
 
 void KinectSkeleton::UpdateSkeleton(const NUI_SKELETON_DATA &skeletonData)
@@ -95,24 +107,18 @@ void KinectSkeleton::UpdateSkeleton(const NUI_SKELETON_DATA &skeletonData)
 
     for (int i=0; i<NUI_SKELETON_POSITION_COUNT; ++i)
     {
-        // Don't use BoneIndexToName(i) here as it creates a 
-        // QString every single time. Use faster lookup from boneNames_.
-        float4 &pos = bonePositions_[boneNames_[i]];
+        BoneDataPair &dataPair = boneData_[boneNames_[i]];
+        dataPair.first = skeletonData.eSkeletonPositionTrackingState[i];
 
-        if (skeletonData.eSkeletonPositionTrackingState[i] != NUI_SKELETON_POSITION_NOT_TRACKED)
+        if (dataPair.first != NUI_SKELETON_POSITION_NOT_TRACKED)
         {
-            pos.x = skeletonData.SkeletonPositions[i].x;
-            pos.y = skeletonData.SkeletonPositions[i].y;
-            pos.z = skeletonData.SkeletonPositions[i].z;
-            pos.w = skeletonData.SkeletonPositions[i].w;
+            dataPair.second.x = skeletonData.SkeletonPositions[i].x;
+            dataPair.second.y = skeletonData.SkeletonPositions[i].y;
+            dataPair.second.z = skeletonData.SkeletonPositions[i].z;
+            dataPair.second.w = skeletonData.SkeletonPositions[i].w;
         }
         else
-        {
-            pos.x = 0;
-            pos.y = 0;
-            pos.z = 0;
-            pos.w = 0;
-        }
+            dataPair.second = float4::zero;
     }
 
     if (!updated)
@@ -139,11 +145,9 @@ void KinectSkeleton::ResetSkeleton()
 
         for (int i=0; i<NUI_SKELETON_POSITION_COUNT; ++i)
         {
-            float4 &pos = bonePositions_[BoneIndexToName(i)];
-            pos.x = 0;
-            pos.y = 0;
-            pos.z = 0;
-            pos.w = 0;
+            BoneDataPair &dataPair = boneData_[boneNames_[i]];
+            dataPair.first = NUI_SKELETON_POSITION_NOT_TRACKED;
+            dataPair.second = float4::zero;
         }
     }
 }
@@ -170,27 +174,82 @@ void KinectSkeleton::EmitTrackingChanged()
     }
 }
 
-float4 KinectSkeleton::BonePosition(QString boneName)
+bool KinectSkeleton::IsBoneTracked(const QString &boneName)
+{
+    if (boneName.isEmpty())
+        return false;
+
+    QMutexLocker lock(&mutexData_);
+    BoneDataMap::const_iterator iter = boneData_.find(boneName.toStdString());
+    if (iter == boneData_.end())
+    {
+        LogError("[KinectSkeleton]: IsBoneTracked() Bone with name " + boneName + " does not exist!");
+        return false;
+    }
+    return ((*iter).second.first != NUI_SKELETON_POSITION_NOT_TRACKED);
+}
+
+bool KinectSkeleton::IsBoneTracked(int boneIndex)
+{
+    QString boneName = BoneIndexToName(boneIndex);
+    if (boneName.isEmpty())
+    {
+        LogError("[KinectSkeleton]: IsBoneTracked() Bone with index " + QString::number(boneIndex) + " does not exist!");
+        return false;
+    }
+    return IsBoneTracked(boneName);
+}
+
+bool KinectSkeleton::IsBoneInferred(const QString &boneName)
 {
     QMutexLocker lock(&mutexData_);
+    BoneDataMap::const_iterator iter = boneData_.find(boneName.toStdString());
+    if (iter == boneData_.end())
+    {
+        LogError("[KinectSkeleton]: IsBoneTracked() Bone with name " + boneName + " does not exist!");
+        return false;
+    }
+    return ((*iter).second.first == NUI_SKELETON_POSITION_INFERRED);
+}
 
-    if (!bonePositions_.contains(boneName))
+bool KinectSkeleton::IsBoneInferred(int boneIndex)
+{
+    QString boneName = BoneIndexToName(boneIndex);
+    if (boneName.isEmpty())
+    {
+        LogError("[KinectSkeleton]: IsBoneInferred() Bone with index " + QString::number(boneIndex) + " does not exist!");
+        return false;
+    }
+    return IsBoneInferred(boneName);
+}
+
+float4 KinectSkeleton::BonePosition(const QString &boneName)
+{
+    QMutexLocker lock(&mutexData_);
+    BoneDataMap::const_iterator iter = boneData_.find(boneName.toStdString());
+    if (iter == boneData_.end())
     {
         LogError("[KinectSkeleton]: BonePosition() Bone with name " + boneName + " does not exist!");
-        return float4(0,0,0,0);
+        return float4::zero;
     }
-    return bonePositions_.value(boneName);
+    return (*iter).second.second;
 }
 
-float4 KinectSkeleton::BonePosition(int index)
+float4 KinectSkeleton::BonePosition(int boneIndex)
 {
-    return BonePosition(BoneIndexToName(index));
+    QString boneName = BoneIndexToName(boneIndex);
+    if (boneName.isEmpty())
+    {
+        LogError("[KinectSkeleton]: BonePosition() Bone with index " + QString::number(boneIndex) + " does not exist!");
+        return float4::zero;
+    }
+    return BonePosition(BoneIndexToName(boneIndex));
 }
 
-QString KinectSkeleton::BoneIndexToName(int index)
+QString KinectSkeleton::BoneIndexToName(int boneIndex)
 {
     QString base = "bone-";
-    switch (index)
+    switch (boneIndex)
     {
         case NUI_SKELETON_POSITION_HIP_CENTER:
             return base + "hip-center";
@@ -233,6 +292,6 @@ QString KinectSkeleton::BoneIndexToName(int index)
         case NUI_SKELETON_POSITION_FOOT_RIGHT:
             return base + "foot-right";
         default:
-            return base + "unknown-" + QString::number(index);
+            return "";
     }
 }

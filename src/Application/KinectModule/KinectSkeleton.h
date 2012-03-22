@@ -10,11 +10,18 @@
 #include <QStringList>
 #include <QMutex>
 
+#include <map>
+#include <vector>
+#include <utility>
+
 #include "Win.h"
 #include <NuiApi.h>
 
 #include "Math/float3.h"
 #include "Math/float4.h"
+
+typedef std::pair<NUI_SKELETON_POSITION_TRACKING_STATE, float4> BoneDataPair;
+typedef std::map<std::string, BoneDataPair > BoneDataMap;
 
 /** KinectSkeleton is accessed by both the Kinect processing thread and the main thread
     so its data getters and setters are protected with mutexes. */
@@ -61,7 +68,7 @@ public:
 
     float4 Position();
 
-    QHash<QString, float4> BonePositions();
+    BoneDataMap BoneData();
 
     // Called from the Kinect processing thread.
     void UpdateSkeleton(const NUI_SKELETON_DATA &skeletonData);
@@ -76,11 +83,32 @@ public:
     void EmitTrackingChanged();
 
 public slots:
-    float4 BonePosition(QString boneName);
-    float4 BonePosition(int index);
+    /// Get if bone is tracked with name.
+    bool IsBoneTracked(const QString &boneName);
+    
+    /// Get if bone is tracked with index.
+    bool IsBoneTracked(int boneIndex);
 
-    /// \note This function will return "unknown-<index>" if index is invalid.
-    QString BoneIndexToName(int index);
+    /// Get if bone position is inferred with name.
+    /** Inferred means that the position was calculated but 
+        it has no real time position from the sensor. */
+    bool IsBoneInferred(const QString &boneName);
+    
+    /// Get if bone position is inferred with index.
+    /** Inferred means that the position was calculated but 
+        it has no real time position from the sensor. */
+    bool IsBoneInferred(int boneIndex);
+
+    /// Get bone position with name.
+    /** \see BonePosition(int boneIndex) IsBoneTracked, IsBoneInferred */
+    float4 BonePosition(const QString &boneName);
+
+    /// Get bone position with index.
+    /** \see BonePosition(QString boneName) IsBoneTracked, IsBoneInferred */
+    float4 BonePosition(int boneIndex);
+
+    /// Returns bone name for a index. Return empty string if not valid bone index.
+    QString BoneIndexToName(int boneIndex);
 
 signals:
     /// This signal is emitted when the tracking state of this skeleton changes.
@@ -91,7 +119,6 @@ signals:
 
 private:
     bool tracking_;
-    QStringList boneNames_;
 
     uint trackingId_;
     uint enrollmentIndex_;
@@ -101,5 +128,6 @@ private:
 
     QMutex mutexData_;
 
-    QHash<QString, float4> bonePositions_;
+    std::vector<std::string> boneNames_;
+    BoneDataMap boneData_;
 };

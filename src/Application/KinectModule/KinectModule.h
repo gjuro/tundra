@@ -5,6 +5,7 @@
 #include "IModule.h"
 #include "KinectAPI.h"
 #include "KinectFwd.h"
+#include "KinectSkeleton.h"
 
 #include "Win.h"
 #include <NuiApi.h>
@@ -20,6 +21,7 @@
 #include <QRectF>
 #include <QImage>
 #include <QScriptEngine>
+#include <QPointer>
 
 /** KinectModule reads Kinect with Microsoft Kinect SDK. A dynamic object 'kinect' 
     will emit the data with signals that it gathers from the kinect device. 
@@ -82,6 +84,15 @@ private slots:
     /// \note Do not call this from outside KinectModule.
     void OnSkeletonTracking(bool tracking);
 
+    /// Handler for start/stop button press.
+    void OnStartStopToggled();
+
+    /// Shows adjust elevation widget.
+    void ShowElevationWidget();
+
+    /// Handler for slider released.
+    void OnElevationChanged();
+
     /// Shows control panel widget.
     void OnShowControlPanel();
 
@@ -116,6 +127,9 @@ private:
     /// Kinect processing thread that listens to the Kinect SDK events.
     static DWORD WINAPI KinectProcessThread(LPVOID pParam);
 
+    /// Kinect status callback.
+    static void CALLBACK KinectStatusChange(HRESULT status, const OLECHAR* instanceName, const OLECHAR *uniqueDeviceName, void *userData);
+
     /// Callback for when video is available.
     /// \note We are inside the Kinect processing thread when this function is called. Do not call this outside KinectModule.
     void GetVideo();
@@ -142,7 +156,7 @@ private:
     /// @param QRectF Rect of the drawing surface.
     /// @param float4 Bone 1 position.
     /// @param float4 Bone 2 position.
-    void ConnectBones(QPainter *p, QRectF pRect, float4 pos1, float4 pos2);
+    void ConnectBones(QPainter *p, const QRectF &pRect, const int &boneRenderingMode, BoneDataMap &boneData, const std::string &boneName1, const std::string &boneName2);
 
     QString LC;
 
@@ -150,6 +164,8 @@ private:
     
     QWidget *kinectWidget_;
     Ui::KinectWidget kinectUi_;
+
+    QPointer<QWidget> kinectElevationWidget_;
 
     QSize videoSize_;
     QSize depthSize_;

@@ -82,3 +82,8 @@ QImage KinectDevice::DepthImage()
 {
     return (owner_ != 0 ? owner_->DepthImage() : QImage());
 }
+
+int KinectDevice::BoneCount()
+{
+    return NUI_SKELETON_POSITION_COUNT;
+}

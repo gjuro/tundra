@@ -4,7 +4,6 @@
 
 #include "KinectModule.h"
 #include "KinectDevice.h"
-#include "KinectSkeleton.h"
 
 #include "Framework.h"
 #include "CoreDefines.h"
@@ -20,6 +19,11 @@
 #include <QMutexLocker>
 #include <QPair>
 #include <QPixmap>
+#include <QDebug>
+#include <QThread>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QSlider>
 
 #include "MemoryLeakCheck.h"
 
@@ -78,8 +82,8 @@ void KinectModule::Initialize()
     kinectWidget_ = new QWidget();
 
     kinectUi_.setupUi(kinectWidget_);
-    connect(kinectUi_.buttonStart, SIGNAL(clicked()), SLOT(StartKinect()));
-    connect(kinectUi_.buttonStop, SIGNAL(clicked()), SLOT(StopKinect()));
+    connect(kinectUi_.buttonStartStop, SIGNAL(clicked()), SLOT(OnStartStopToggled()));
+    connect(kinectUi_.buttonAdjustElevation, SIGNAL(clicked()), SLOT(ShowElevationWidget()));
 
     if (framework_->Ui()->MainWindow())
     {
@@ -96,6 +100,9 @@ void KinectModule::Initialize()
 
     kinectDevice_ = new KinectDevice(this);
     framework_->RegisterDynamicObject("kinect", kinectDevice_);
+
+    // Mandatory Kinect status callback
+    NuiSetDeviceStatusCallback(&KinectModule::KinectStatusChange, this);
 }
 
 void KinectModule::Uninitialize()
@@ -198,8 +205,6 @@ bool KinectModule::StartKinect()
     eventVideoFrame_ = CreateEventA(NULL, TRUE, FALSE, NULL);
     eventSkeletonFrame_ = CreateEventA(NULL, TRUE, FALSE, NULL);
 
-    LogInfo(LC + "Successfully found a Kinect device.");
-
     DWORD nuiFlags = NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_SKELETON |  NUI_INITIALIZE_FLAG_USES_COLOR;
     result = kinectSensor_->NuiInitialize(nuiFlags);
     if (result == E_NUI_SKELETAL_ENGINE_BUSY)
@@ -211,9 +216,17 @@ bool KinectModule::StartKinect()
     if (FAILED(result))
     {
         if (result == E_NUI_DEVICE_IN_USE)
+        {
             LogError(LC + "Kinect device is already in use, cannot start!");
+            if (kinectWidget_)
+                kinectUi_.labelStatus->setText("<span style=\"color:red;\">Kinect device is already in use, cannot start!</span>");
+        }
         else
+        {
             LogError(LC + "Starting kinect failed for unknown reason!");
+            if (kinectWidget_)
+                kinectUi_.labelStatus->setText("<span style=\"color:red;\">Starting kinect failed for unknown reason!</span>");
+        }
         if (kinectSensor_)
         {
             kinectSensor_->NuiShutdown();
@@ -222,6 +235,8 @@ bool KinectModule::StartKinect()
         kinectSensor_= 0;
         return false;
     }
+
+    LogInfo(LC + "Kinect started.");
 
     // Precautionary null check
     if (!kinectSensor_)
@@ -270,6 +285,20 @@ bool KinectModule::StartKinect()
     eventKinectProcessStop_ = CreateEventA(NULL, FALSE, FALSE, NULL);
     kinectProcess_ = CreateThread(NULL, 0, KinectProcessThread, this, 0, NULL);
 
+    // Reset images behind the mutexes
+    {
+        QMutexLocker lockVideo(&mutexVideo_);
+        QImage blankVideo(videoSize_, QImage::Format_RGB32);
+        blankVideo.fill(Qt::black);
+        video_ = blankVideo;
+    }
+    {
+        QMutexLocker lockDepth(&mutexDepth_);
+        QImage blankDepth(depthSize_, QImage::Format_RGB32);
+        blankDepth.fill(Qt::black);
+        depth_ = blankDepth;
+    }
+
     UpdateControlPanelState();
 
     return true;
@@ -296,6 +325,7 @@ void KinectModule::StopKinect()
             CloseHandle(kinectProcess_);
         }
         CloseHandle(eventKinectProcessStop_);
+        eventKinectProcessStop_ = 0;
     }
 
     // Shutdown Kinect
@@ -321,21 +351,44 @@ void KinectModule::StopKinect()
 
     // Release ptr
     if (kinectSensor_)
+    {
         kinectSensor_->Release();
+        LogInfo(LC + "Kinect stopped.");
+    }
     kinectSensor_ = 0;
 
     // Release Kinect name string
     SysFreeString(kinectName_);
 
     // Reset skeletons
-    foreach(KinectSkeleton *skeleton, skeletons_)
     {
-        if (skeleton)
+        QMutexLocker lockSkeletons(&mutexSkeleton_);
+        foreach(KinectSkeleton *skeleton, skeletons_)
         {
-            skeleton->ResetSkeleton();
-            skeleton->emitTrackingChange = false;
+            if (skeleton)
+            {
+                skeleton->ResetSkeleton();
+                skeleton->emitTrackingChange = false;
+            }
         }
     }
+
+    // Reset images behind the mutexes
+    {
+        QMutexLocker lockVideo(&mutexVideo_);
+        QImage blankVideo(videoSize_, QImage::Format_RGB32);
+        blankVideo.fill(Qt::black);
+        video_ = blankVideo;
+    }
+    {
+        QMutexLocker lockDepth(&mutexDepth_);
+        QImage blankDepth(depthSize_, QImage::Format_RGB32);
+        blankDepth.fill(Qt::black);
+        depth_ = blankDepth;
+    }
+
+    if (kinectElevationWidget_)
+        kinectElevationWidget_->close();
 
     UpdateControlPanelState();
 }
@@ -405,6 +458,23 @@ DWORD WINAPI KinectModule::KinectProcessThread(LPVOID pParam)
     }
 
     return 0;
+}
+
+void CALLBACK KinectModule::KinectStatusChange(HRESULT status, const OLECHAR *instanceName, const OLECHAR *uniqueDeviceName, void *userData)
+{
+    /*
+    KinectModule *kinectModule = reinterpret_cast<KinectModule*>(userData);
+    if (SUCCEEDED(status))
+    {
+        if (status == S_OK)
+            qDebug() << "KinectStatusChange: OK";
+        else
+            qDebug() << "KinectStatusChange: NOT OK";
+    }
+    else
+        qDebug() << "KinectStatusChange: ERROR";
+    qDebug() << "Instance:" << instanceName << "Device:" << uniqueDeviceName << "Status:" << status;
+    */
 }
 
 void KinectModule::GetVideo()
@@ -607,6 +677,18 @@ void KinectModule::GetSkeleton()
 
 void KinectModule::OnSkeletonTracking(bool tracking)
 {
+    // Tracking lost for all skeletons, clear the rendering
+    if (!tracking && kinectWidget_)
+    {
+        QPixmap blank(kinectUi_.widgetSkeletons->size());
+        blank.fill(Qt::black);
+        QPainter p(&blank);
+        p.setPen(Qt::white);
+        p.setFont(QFont("Arial", 10));
+        p.drawText(blank.rect(), "No Skeletons Detected", QTextOption(Qt::AlignCenter));
+        p.end();
+        kinectUi_.widgetSkeletons->setPixmap(blank);
+    }
     kinectDevice_->SetTrackingSkeletons(tracking);
 }
 
@@ -642,6 +724,85 @@ void KinectModule::OnSkeletonsReady()
     }
 }
 
+void KinectModule::OnStartStopToggled()
+{
+    if (!IsStarted())
+        StartKinect();
+    else
+        StopKinect();
+}
+
+void KinectModule::ShowElevationWidget()
+{
+    if (!kinectWidget_ || !kinectWidget_->isVisible())
+        return;
+
+    // Show existing if alive
+    if (kinectElevationWidget_)
+        SAFE_DELETE(kinectElevationWidget_);
+
+    LONG elevationNow = 0;
+    HRESULT result = NuiCameraElevationGetAngle(&elevationNow);
+    if (FAILED(result))
+    {
+        LogError("Failed to read Kinect elevation angle, cannot show or set elevation angle.");
+        return;
+    }
+
+    kinectElevationWidget_ = new QWidget();
+    kinectElevationWidget_->setAttribute(Qt::WA_DeleteOnClose, true);
+    
+    QSlider *slider = new QSlider(Qt::Vertical, kinectElevationWidget_);
+    slider->setObjectName("kinectElevationSlider");
+    slider->setMinimum((int)NUI_CAMERA_ELEVATION_MINIMUM);
+    slider->setMaximum((int)NUI_CAMERA_ELEVATION_MAXIMUM);
+    slider->setSingleStep(1);
+    slider->setPageStep(1);
+    slider->setValue((int)elevationNow);
+
+    connect(slider, SIGNAL(sliderReleased()), this, SLOT(OnElevationChanged()));
+
+    QLabel *labelDegrees = new QLabel(QString("%1 degrees").arg((int)elevationNow), kinectElevationWidget_);
+    labelDegrees->setObjectName("kinectElevationLabel");
+    labelDegrees->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    labelDegrees->setAlignment(Qt::AlignLeft|Qt::AlignBottom);
+    labelDegrees->setFont(QFont("Arial", 18));
+
+    QHBoxLayout *layout = new QHBoxLayout(kinectElevationWidget_);
+    layout->addWidget(slider);
+    layout->addWidget(labelDegrees);
+
+    kinectElevationWidget_->setWindowTitle("Kinect Elevation");
+    kinectElevationWidget_->setWindowFlags(Qt::Tool);
+    kinectElevationWidget_->setLayout(layout);
+
+    kinectElevationWidget_->resize(150, 150);
+    kinectElevationWidget_->show();
+}
+
+void KinectModule::OnElevationChanged()
+{
+    if (!kinectElevationWidget_)
+        return;
+
+    QSlider *slider = kinectElevationWidget_->findChild<QSlider*>("kinectElevationSlider");
+    QLabel *labelDegrees = kinectElevationWidget_->findChild<QLabel*>("kinectElevationLabel");
+    if (slider && labelDegrees)
+    {
+        int value = slider->value();
+        if (value < (int)NUI_CAMERA_ELEVATION_MINIMUM)
+            value = (int)NUI_CAMERA_ELEVATION_MINIMUM;
+        if (value > (int)NUI_CAMERA_ELEVATION_MAXIMUM)
+            value = (int)NUI_CAMERA_ELEVATION_MAXIMUM;
+
+        labelDegrees->setText(QString("%1 degrees").arg(value));
+
+        HRESULT result = NuiCameraElevationSetAngle((LONG)value);
+        if (FAILED(result))
+            labelDegrees->setText("<span style=\"color:red;\">Error setting degrees</span>");
+    }
+}
+
 void KinectModule::OnShowControlPanel()
 {
     if (!kinectWidget_)
@@ -663,11 +824,13 @@ void KinectModule::UpdateControlPanelState()
     if (!kinectWidget_)
         return;
 
+    kinectUi_.buttonAdjustElevation->setEnabled(false);
+
     if (!HasKinect())
     {
         kinectUi_.labelStatus->setText("<span style=\"color:red;\">No Kinect devices detected on the machine</span>");
-        kinectUi_.buttonStart->setEnabled(false);
-        kinectUi_.buttonStop->setEnabled(false);
+        kinectUi_.buttonStartStop->setText("Start Kinect");
+        kinectUi_.buttonStartStop->setEnabled(false);    
         ResetControlPanelRendering();
     }
     else
@@ -675,16 +838,16 @@ void KinectModule::UpdateControlPanelState()
         if (!IsStarted())
         {
             kinectUi_.labelStatus->setText("Kinect device available");
-            kinectUi_.buttonStart->setEnabled(true);
-            kinectUi_.buttonStop->setEnabled(false);
+            kinectUi_.buttonStartStop->setText("Start Kinect");
             ResetControlPanelRendering();
         }
         else
         {
             kinectUi_.labelStatus->setText("Kinect device running");
-            kinectUi_.buttonStart->setEnabled(false);
-            kinectUi_.buttonStop->setEnabled(true);
+            kinectUi_.buttonStartStop->setText("Stop Kinect");
+            kinectUi_.buttonAdjustElevation->setEnabled(true);
         }
+        kinectUi_.buttonStartStop->setEnabled(true);
     }
 }
 
@@ -693,13 +856,23 @@ void KinectModule::ResetControlPanelRendering()
     if (!kinectWidget_)
         return;
 
-    // All are same size, just make one QPixmap
+    // Depth and skeleton are the same size.
     QPixmap blank(kinectUi_.widgetDepth->size());
     blank.fill(Qt::black);
-
     kinectUi_.widgetDepth->setPixmap(blank);
-    kinectUi_.widgetColor->setPixmap(blank);
+    
+    // Draw some text to indicate no skeletons have been detected.
+    QPainter p(&blank);
+    p.setPen(Qt::white);
+    p.setFont(QFont("Arial", 10));
+    p.drawText(blank.rect(), "No Skeletons Detected", QTextOption(Qt::AlignCenter));
+    p.end();
     kinectUi_.widgetSkeletons->setPixmap(blank);
+
+    // Video is a bit bigger so create separate pixmap for it.
+    QPixmap blankVideo(kinectUi_.widgetColor->size());
+    blankVideo.fill(Qt::black);
+    kinectUi_.widgetColor->setPixmap(blankVideo);
 }
 
 void KinectModule::DrawSkeletons()
@@ -708,78 +881,97 @@ void KinectModule::DrawSkeletons()
     if (!kinectWidget_ || !kinectWidget_->isVisible())
         return;  
 
+    // Check from the ui settings if we should draw only tracked bones or also inferred bones.
+    int boneRenderingMode = kinectUi_.comboBoneRendering != 0 ? kinectUi_.comboBoneRendering->currentIndex() : 0;
+
+    // Prepare canvas image
     QRect imgRect(0, 0, kinectUi_.widgetSkeletons->width(), kinectUi_.widgetSkeletons->height());
     QImage skeletonImage(imgRect.size(), QImage::Format_RGB32);
+    skeletonImage.fill(Qt::black);
+
+    // Prepare brush and pen
+    QBrush brush(Qt::SolidPattern);
 
     QPen pen(Qt::SolidLine);
+    pen.setJoinStyle(Qt::RoundJoin);
+    pen.setWidth(1);
+    pen.setColor(Qt::white);
+
     QPainter p(&skeletonImage);
-    p.setPen(Qt::black);
-    p.setBrush(QBrush(Qt::black));
-    p.drawRect(imgRect);    
+    
 
     {
         QMutexLocker lock(&mutexSkeleton_);
-
-        int skeletonIndex = 0;
         foreach(KinectSkeleton *skeleton, skeletons_)
         {
-            if (!skeleton)
-                continue;
-            if (!skeleton->IsTracking())
+            if (!skeleton || !skeleton->IsTracking())
                 continue;
 
             // Support different colors for 6 unique skeletons
             // that is the maximum for the Kinect.
-            if (skeletonIndex == 0)
-                p.setBrush(QBrush(Qt::blue));
-            else if (skeletonIndex == 1)
-                p.setBrush(QBrush(Qt::red));
-            else if (skeletonIndex == 2)
-                p.setBrush(QBrush(Qt::green));
-            else if (skeletonIndex == 3)
-                p.setBrush(QBrush(Qt::yellow));
-            else if (skeletonIndex == 4)
-                p.setBrush(QBrush(Qt::magenta));
-            else if (skeletonIndex == 5)
-                p.setBrush(QBrush(Qt::cyan));
-
-            // Draw bone lines
+            switch(skeleton->EnrollmentIndex())
+            {
+                case 0: 
+                    brush.setColor(Qt::blue);
+                    break;
+                case 1: 
+                    brush.setColor(Qt::red);
+                    break;
+                case 2: 
+                    brush.setColor(Qt::green);
+                    break;
+                case 3: 
+                    brush.setColor(Qt::yellow);
+                    break;
+                case 4: 
+                    brush.setColor(Qt::magenta);
+                    break;
+                case 5: 
+                    brush.setColor(Qt::cyan);
+                    break;
+                default:
+                    brush.setColor(Qt::white);
+                    break;
+            }
+            pen.setColor(brush.color());
             pen.setWidth(3);
-            pen.setBrush(p.brush()); 
             p.setPen(pen);
 
-            QHash<QString, float4> boneData = skeleton->BonePositions();
-
-            ConnectBones(&p, imgRect, boneData["bone-head"], boneData["bone-shoulder-center"]);
-            ConnectBones(&p, imgRect, boneData["bone-shoulder-center"], boneData["bone-spine"]);
-            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-spine"]);
-            ConnectBones(&p, imgRect, boneData["bone-shoulder-left"], boneData["bone-shoulder-center"]);
-            ConnectBones(&p, imgRect, boneData["bone-shoulder-right"], boneData["bone-shoulder-center"]);
-            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-hip-left"]);
-            ConnectBones(&p, imgRect, boneData["bone-hip-center"], boneData["bone-hip-right"]);
+            // Draw bone lines
+            BoneDataMap boneData = skeleton->BoneData();
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-head", "bone-shoulder-center");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-shoulder-center", "bone-spine");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-hip-center", "bone-spine");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-shoulder-left", "bone-shoulder-center");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-shoulder-right", "bone-shoulder-center");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-hip-center", "bone-hip-left");
+            ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-hip-center", "bone-hip-right");
 
             foreach(QString side, drawBoneSides_)
                 for(int i=0; i < drawBonePairs_.length(); ++i)
-                    ConnectBones(&p, imgRect, boneData["bone-" + drawBonePairs_[i].first + side], boneData["bone-" + drawBonePairs_[i].second + side]);
+                    ConnectBones(&p, imgRect, boneRenderingMode, boneData, "bone-" + QString(drawBonePairs_[i].first + side).toStdString(), 
+                        "bone-" + QString(drawBonePairs_[i].second + side).toStdString());
+            
+            p.setBrush(brush);
+            p.setPen(Qt::transparent);
 
-            // Draw bone positions
-            pen.setWidth(1);
-            pen.setBrush(p.brush()); 
-            p.setPen(pen);
-
-            foreach(QString boneName, skeleton->BoneNames())
+            for(BoneDataMap::const_iterator iter = boneData.begin(); iter != boneData.end(); ++iter)
             {
-                float4 vec = boneData[boneName];
-                vec *= 200;
+                const BoneDataPair &dataPair = (*iter).second;
+                if (boneRenderingMode == 0 && dataPair.first != NUI_SKELETON_POSITION_TRACKED)
+                    continue;
+                else if (boneRenderingMode == 1 && dataPair.first == NUI_SKELETON_POSITION_NOT_TRACKED)
+                    continue;
+
+                float4 vec = dataPair.second * 200;
                 QPointF pos(vec.x, vec.y);
 
-                if (boneName == "bone-head")
-                    p.drawEllipse(imgRect.center() + pos, 15, 15);
+                // Make the head a bit bigger
+                if ((*iter).first == "bone-head")
+                    p.drawEllipse(imgRect.center() + pos, 20, 23);
                 else
-                    p.drawEllipse(imgRect.center() + pos, 4, 4);
+                    p.drawEllipse(imgRect.center() + pos, 5, 5);
             }
-
-            skeletonIndex++;
         }
     }
 
@@ -860,12 +1052,28 @@ RGBQUAD KinectModule::ConvertDepthShortToQuad(USHORT s)
     return q;
 }
 
-void KinectModule::ConnectBones(QPainter *p, QRectF pRect, float4 vec1, float4 vec2)
+void KinectModule::ConnectBones(QPainter *p, const QRectF &pRect, const int &boneRenderingMode, BoneDataMap &boneData, const std::string &boneName1, const std::string &boneName2)
 {
-    vec1 *= 200;
+    BoneDataMap::iterator iter1 = boneData.find(boneName1);
+    if (iter1 == boneData.end())
+        return;
+    if (boneRenderingMode == 0 && (*iter1).second.first != NUI_SKELETON_POSITION_TRACKED)
+        return;
+    else if (boneRenderingMode == 1 && (*iter1).second.first == NUI_SKELETON_POSITION_NOT_TRACKED)
+        return;
+
+    BoneDataMap::iterator iter2 = boneData.find(boneName2);
+    if (iter2 == boneData.end())
+        return;
+    if (boneRenderingMode == 0 && (*iter2).second.first != NUI_SKELETON_POSITION_TRACKED)
+        return;
+    else if (boneRenderingMode == 1 && (*iter2).second.first == NUI_SKELETON_POSITION_NOT_TRACKED)
+        return;
+
+    float4 vec1 = (*iter1).second.second * 200;
     QPointF pos1 = pRect.center() + QPointF(vec1.x, vec1.y);
 
-    vec2 *= 200;
+    float4 vec2 = (*iter2).second.second * 200;
     QPointF pos2 = pRect.center() + QPointF(vec2.x, vec2.y);
 
     p->drawLine(pos1, pos2);

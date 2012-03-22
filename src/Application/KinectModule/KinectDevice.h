@@ -112,6 +112,9 @@ public slots:
     /// Return the last depth image received from Kinect. Call this when you receive the DepthUpdate signal.
     QImage DepthImage();
 
+    /// Return the maximum bone count for a skeleton. Treat this as for(i=0;i<BoneCount();++i).
+    int BoneCount();
+
 signals:
     /// Emitted when a new video image is received from Kinect.
     /// Call VideoImage function to get the image data if you are interested in it.
