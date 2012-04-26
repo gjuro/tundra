@@ -24,7 +24,7 @@ public slots:
     void RunUpdater(QString paramter);
 
 private:
-	AutoUpdater* updater_;
+    AutoUpdater* updater_;
 };
 
 #endif
