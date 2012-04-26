@@ -7,8 +7,8 @@ if (WIN32)
     file (GLOB H_FILES UpdateModule.h)
     file (GLOB XML_FILES *.xml)
 elseif (APPLE)
-    file (GLOB CPP_FILES AutoUpdater.cpp CocoaInitializer.mm SparkleAutoUpdater.mm UpdateModuleMac.cpp)
-    file (GLOB H_FILES AutoUpdater.h CocoaInitializer.h SparkleAutoUpdater.h UpdateModuleMac.h)
+    file (GLOB CPP_FILES AutoUpdater.cpp CocoaInitializer.mm SparkleAutoUpdater.mm UpdaterDelegate.mm UpdateModuleMac.cpp)
+    file (GLOB H_FILES AutoUpdater.h CocoaInitializer.h SparkleAutoUpdater.h UpdaterDelegate.h UpdateModuleMac.h)
 endif ()
 
 # Qt4 Moc files to "CMake Moc" subgroup
