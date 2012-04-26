@@ -1,6 +1,7 @@
 #import "UpdaterDelegate.h"
 #import "SparkleAutoUpdater.h"
 
+#include <QPixmap>
 #include <QMessageBox>
 
 @implementation UpdaterDelegate
@@ -33,15 +34,31 @@
 
 - (void)updater:(SUUpdater *)updater didFindValidUpdate:(SUAppcastItem *)update
 {
+    // Convert NSString to char*
+    const char * versionStr = [[update versionString] UTF8String]; 
 }
-
+*/
 - (void)updaterDidNotFindUpdate:(SUUpdater *)update
 {
-    QMessageBox *message = new QMessageBox(QMessageBox::Information, "Check for update", "You already have the latest version", QMessageBox::Ok);
-    message->setWindowModality(Qt::NonModal);
-    message->exec();
-}
+    if (cppUpdater->IsSilentChecking())
+        return;
 
+    QMessageBox *message = new QMessageBox(QMessageBox::Information, "", "Your application is up-to-date.", QMessageBox::Ok);
+    NSImage* icon = [NSApp applicationIconImage];
+    if (icon)
+    {
+        CGImageSourceRef source;
+
+        source = CGImageSourceCreateWithData((CFDataRef)[icon TIFFRepresentation], NULL);
+        CGImageRef maskRef = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+        QPixmap pixmap = QPixmap::fromMacCGImageRef(maskRef);
+        message->setIconPixmap(pixmap.scaled(64,64, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+    }
+    message->setInformativeText(" (current version: " + cppUpdater->GetVersion() + ")");
+    message->setWindowModality(Qt::NonModal);
+    message->show();
+}
+/*
 // Sent immediately before installing the specified update.
 - (void)updater:(SUUpdater *)updater willInstallUpdate:(SUAppcastItem *)update
 {
@@ -54,15 +71,17 @@ shouldPostponeRelaunchForUpdate:(SUAppcastItem *)update
   untilInvoking:(NSInvocation *)invocation
 {
 }
-
+*/
 
  // Some apps *can not* be relaunched in certain circumstances. They can use this method
  //	to prevent a relaunch "hard":
 - (BOOL)updaterShouldRelaunchApplication:(SUUpdater *)updater
 {
+    cppUpdater->KillTundra();
+    return YES;
 }
 
-
+/*
 // Called immediately before relaunching.
 - (void)updaterWillRelaunchApplication:(SUUpdater *)updater
 {

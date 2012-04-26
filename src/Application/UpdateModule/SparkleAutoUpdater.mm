@@ -10,6 +10,7 @@
 #import "UpdaterDelegate.h"
 
 #include "Framework.h"
+#include "Application.h"
 
 class SparkleAutoUpdater::Private
 {
@@ -18,7 +19,8 @@ class SparkleAutoUpdater::Private
         UpdaterDelegate* delegate;
 };
 
-SparkleAutoUpdater::SparkleAutoUpdater(Framework* fw, const QString& aUrl)
+SparkleAutoUpdater::SparkleAutoUpdater(Framework* fw, const QString& aUrl) :
+    silent(true)
 {
     d = new Private;
     framework = fw;
@@ -43,8 +45,13 @@ SparkleAutoUpdater::~SparkleAutoUpdater()
     delete d;
 }
 
-void SparkleAutoUpdater::checkForUpdates()
+void SparkleAutoUpdater::checkForUpdates(QString& parameter)
 {
+    // Always treat update checking as 'silent' one, if not otherwise explicitly requested
+    silent = true;
+    if (parameter == "/checknow")
+        silent = false;
+
     [d->updater checkForUpdatesInBackground];
 }
 
@@ -58,5 +65,12 @@ bool SparkleAutoUpdater::IsTundraExiting()
     return framework->IsExiting();
 }
 
+bool SparkleAutoUpdater::IsSilentChecking()
+{
+    return silent;
+}
 
-
+QString SparkleAutoUpdater::GetVersion()
+{
+    return framework->App()->Version();
+}

@@ -20,15 +20,14 @@ void UpdateModule::Initialize()
 {
     CocoaInitializer initializer;
     updater_ = new SparkleAutoUpdater(GetFramework(), "http://adminotech.data.s3.amazonaws.com/clients/tundra2/appcast.xml");
-    
-    if (updater_)
-        updater_->checkForUpdates();
+
+    RunUpdater("/silent");
 }
 
 void UpdateModule::RunUpdater(QString parameter)
 {
     if (updater_)
-        updater_->checkForUpdates();
+        updater_->checkForUpdates(parameter);
 }
 
 extern "C"
