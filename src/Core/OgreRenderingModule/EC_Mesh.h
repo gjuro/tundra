@@ -174,6 +174,10 @@ public:
     Q_PROPERTY(bool castShadows READ getcastShadows WRITE setcastShadows);
     DEFINE_QPROPERTY_ATTRIBUTE(bool, castShadows);
 
+    // Will the mesh have stencil glow
+    Q_PROPERTY(bool stencilGlow READ getstencilGlow WRITE setstencilGlow);
+    DEFINE_QPROPERTY_ATTRIBUTE(bool, stencilGlow);
+
 public slots:
     /// Automatically finds the placeable from the parent entity and sets it.
     void AutoSetPlaceable();
@@ -459,6 +463,15 @@ private:
     /// attaches entity to placeable
     void AttachEntity();
 
+    /// creates a cloned entity for the outline glow
+    void CreateStencilGlow();
+
+    /// set stencil glow to be enabled or not
+    void SetStencilGlowEnabled(bool);
+
+    /// destroys stencil glow entity
+    void DestroyStencilGlow();
+
     /// detaches entity from placeable
     void DetachEntity();
 
@@ -470,6 +483,10 @@ private:
 
     /// Ogre mesh entity
     Ogre::Entity* entity_;
+
+    /// Ogre outline glow entity and node
+    Ogre::Entity* outlineGlowEntity_;
+    Ogre::SceneNode* outlineGlowNode_;
 
     /// Attachment entities
     std::vector<Ogre::Entity*> attachment_entities_;

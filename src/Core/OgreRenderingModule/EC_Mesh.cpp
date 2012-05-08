@@ -22,6 +22,11 @@
 
 #include <Ogre.h>
 #include <OgreTagPoint.h>
+#include <OgreRenderQueueListener.h>
+
+// render queue groups
+#define STENCIL_GLOW_ENTITY Ogre::RENDER_QUEUE_MAIN + 1
+#define STENCIL_GLOW_OUTLINE Ogre::RENDER_QUEUE_OVERLAY + 1
 
 #include "LoggingFunctions.h"
 
@@ -37,7 +42,10 @@ EC_Mesh::EC_Mesh(Scene* scene) :
     meshMaterial(this, "Mesh materials", AssetReferenceList("OgreMaterial")),
     drawDistance(this, "Draw distance", 0.0f),
     castShadows(this, "Cast shadows", false),
+    stencilGlow(this, "Stencil glow", false),
     entity_(0),
+    outlineGlowEntity_(0),
+    outlineGlowNode_(0),
     attached_(false)
 {
     if (scene)
@@ -320,6 +328,13 @@ bool EC_Mesh::SetMesh(QString meshResourceName, bool clone)
     }
     
     AttachEntity();
+
+    if (stencilGlow.Get())
+    {
+        CreateStencilGlow();
+        SetStencilGlowEnabled(true);
+    }
+
     emit MeshChanged();
     
     return true;
@@ -388,7 +403,12 @@ bool EC_Mesh::SetMeshWithSkeleton(const std::string& mesh_name, const std::strin
     }
     
     AttachEntity();
-    
+
+    if (stencilGlow.Get())
+    {
+        CreateStencilGlow();
+        SetStencilGlowEnabled(true);
+    }
     emit MeshChanged();
     
     return true;
@@ -424,6 +444,8 @@ void EC_Mesh::RemoveMesh()
         
         cloned_mesh_name_ = std::string();
     }
+
+    DestroyStencilGlow();
 }
 
 Ogre::Bone* EC_Mesh::GetBone(const QString& boneName) const
@@ -831,6 +853,68 @@ Ogre::Mesh* EC_Mesh::PrepareMesh(const std::string& mesh_name, bool clone)
     return mesh.get();
 }
 
+void EC_Mesh::CreateStencilGlow()
+{
+    if (!entity_)
+        return;
+
+    if (!outlineGlowEntity_ && !outlineGlowNode_)
+    {
+        outlineGlowEntity_ = entity_->clone(entity_->getName() + "_glow");
+        outlineGlowEntity_->setRenderQueueGroup(STENCIL_GLOW_OUTLINE);
+        outlineGlowEntity_->setMaterialName("cg/stencil_glow");
+        
+        OgreWorldPtr world = world_.lock();
+        if (world)
+        {
+            Ogre::SceneManager* mgr = world->OgreSceneManager();
+            if (mgr)
+                outlineGlowNode_ = entity_->getParentSceneNode()->createChildSceneNode(entity_->getName() + "outlineGlowNode");
+        }
+    }    
+}
+
+void EC_Mesh::SetStencilGlowEnabled(bool enabled)
+{
+    if (!entity_)
+        return;
+
+    if (!outlineGlowNode_ && !outlineGlowEntity_)
+        return;
+
+    if (enabled)
+    {        
+        entity_->setRenderQueueGroup(STENCIL_GLOW_ENTITY);
+        outlineGlowNode_->attachObject(outlineGlowEntity_);
+    }
+    else
+    {
+        entity_->setRenderQueueGroup(Ogre::RENDER_QUEUE_MAIN);
+        outlineGlowNode_->detachObject(outlineGlowEntity_);
+    }
+}
+
+void EC_Mesh::DestroyStencilGlow()
+{
+    if (outlineGlowEntity_)
+    {
+        OgreWorldPtr world = world_.lock();
+        Ogre::SceneManager* sceneMgr = world->OgreSceneManager();
+        sceneMgr->destroyEntity(outlineGlowEntity_);
+        
+        outlineGlowEntity_ = 0;
+    }
+
+    if (outlineGlowNode_)
+    {
+        OgreWorldPtr world = world_.lock();
+        Ogre::SceneManager* sceneMgr = world->OgreSceneManager();
+        sceneMgr->destroySceneNode(outlineGlowNode_);
+
+        outlineGlowNode_ = 0;
+    }
+}
+
 void EC_Mesh::UpdateSignals()
 {
     Entity* parent = ParentEntity();
@@ -860,6 +944,14 @@ void EC_Mesh::OnAttributeUpdated(IAttribute *attribute)
                 if (attachment_entities_[i])
                     attachment_entities_[i]->setCastShadows(castShadows.Get());
             }
+        }
+    }
+    else if (attribute == &stencilGlow)
+    {
+        if (entity_)
+        {
+            CreateStencilGlow();
+            SetStencilGlowEnabled(stencilGlow.Get());
         }
     }
     else if (attribute == &nodeTransformation)
