@@ -3,9 +3,9 @@ float4 main(uniform float alpha_value,
 ) : COLOR
 {
    float4 color;
-   color.x = 1.0;
-   color.y = 1.0;
+   color.x = 0.0;
+   color.y = 0.55;
    color.z = 1.0;
-   color.w = 0.4 + (alpha_value * ((sin(time * 5.0) / 3.14 + 1.0) / 2.0 ));
+   color.w = alpha_value * (sin(time * 8.0));
    return color;
 }
