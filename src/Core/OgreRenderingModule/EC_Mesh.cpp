@@ -26,7 +26,7 @@
 
 // render queue groups
 #define STENCIL_GLOW_ENTITY Ogre::RENDER_QUEUE_MAIN + 1
-#define STENCIL_GLOW_OUTLINE Ogre::RENDER_QUEUE_OVERLAY + 1
+#define STENCIL_GLOW_OUTLINE Ogre::RENDER_QUEUE_OVERLAY - 1
 
 #include "LoggingFunctions.h"
 
