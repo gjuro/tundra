@@ -863,7 +863,10 @@ void EC_Mesh::CreateStencilGlow()
         outlineGlowEntity_ = entity_->clone(entity_->getName() + "_glow");
         outlineGlowEntity_->setRenderQueueGroup(STENCIL_GLOW_OUTLINE);
         outlineGlowEntity_->setMaterialName("cg/stencil_glow");
-        
+
+        if (entity_->hasSkeleton())
+            outlineGlowEntity_->shareSkeletonInstanceWith(entity_);
+
         OgreWorldPtr world = world_.lock();
         if (world)
         {
