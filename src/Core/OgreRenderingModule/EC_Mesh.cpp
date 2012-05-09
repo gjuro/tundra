@@ -872,7 +872,10 @@ void EC_Mesh::CreateStencilGlow()
         {
             Ogre::SceneManager* mgr = world->OgreSceneManager();
             if (mgr)
+            {
                 outlineGlowNode_ = entity_->getParentSceneNode()->createChildSceneNode(entity_->getName() + "outlineGlowNode");
+                outlineGlowNode_->setScale(Ogre::Vector3(1.08, 1.08, 1.08));
+            }
         }
     }    
 }
