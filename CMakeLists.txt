@@ -212,7 +212,7 @@ endif()
 
 # Set CMake custom module path & include them
 # The following CMake modules are required for the project to build.
-set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} cmake)
+set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include (Sagase)
 include (ModuleSetup)
 include (ConfigurePackages)
