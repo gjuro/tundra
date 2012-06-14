@@ -210,6 +210,13 @@ else ()
     add_definitions (-Wall -Wextra -Wno-unknown-pragmas -Wno-unused -Wno-reorder -Wno-switch -Wno-write-strings)
 endif()
 
+if (TUNDRA_PLATFORM_ANDROID)
+    add_definitions(-DTUNDRA_PLATFORM_ANDROID)
+endif ()
+if (TUNDRA_OGRE_STATIC)
+    add_definitions(-DTUNDRA_OGRE_STATIC)
+endif ()
+
 # Set CMake custom module path & include them
 # The following CMake modules are required for the project to build.
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)

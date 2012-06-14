@@ -6,19 +6,50 @@
 if (NOT WIN32 AND NOT APPLE)
 # TODO: Remove configure_ogre and replace it with a use_package_ogre() and link_package_ogre()
 macro(configure_ogre)
-  find_path(OGRE_LIBRARY_DIR NAMES lib/libOgreMain.so
-    HINTS ${ENV_OGRE_HOME} ${ENV_NAALI_DEP_PATH})
+    set (TUNDRA_OGRE_MAIN_LIB libOgreMain.so)
+    if (TUNDRA_OGRE_STATIC)
+        set (TUNDRA_OGRE_MAIN_LIB libOgreMainStatic.a)
+    endif ()
+    
+    find_path(OGRE_LIBRARY_DIR NAMES ${TUNDRA_OGRE_MAIN_LIB}
+        HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
 
-  find_path(OGRE_INCLUDE_DIR Ogre.h
-    HINTS ${ENV_OGRE_HOME}/include ${ENV_NAALI_DEP_PATH}/include
-    PATH_SUFFIXES OGRE)
+    find_path(OGRE_INCLUDE_DIR Ogre.h
+        HINTS ${ENV_OGRE_HOME}/include ${ENV_NAALI_DEP_PATH}/include
+        PATH_SUFFIXES OGRE)
 
-  find_library(OGRE_LIBRARY OgreMain
-    HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
+    if (NOT TUNDRA_OGRE_STATIC)
+        find_library(OGRE_LIBRARY OgreMain
+            HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
+    else ()
+        find_library(OGRE_LIBRARY OgreMainStatic
+            HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
+        find_library(OGRE_LIBRARY_SCENEMANAGER Plugin_OctreeSceneManagerStatic
+            HINTS ${ENV_OGRE_HOME}/lib/OGRE ${ENV_NAALI_DEP_PATH}/lib/OGRE)
+        find_library(OGRE_LIBRARY_PARTICLEFX Plugin_ParticleFXStatic
+            HINTS ${ENV_OGRE_HOME}/lib/OGRE ${ENV_NAALI_DEP_PATH}/lib/OGRE)
+        
+        message("** Configuring static Ogre")
+        message(STATUS "Include Directories")
+        message(STATUS "    ${OGRE_INCLUDE_DIR}")
+        message(STATUS "Library Directories")
+        message(STATUS "    ${OGRE_LIBRARY_DIR}")
+        message(STATUS "Libraries")
+        message(STATUS "    ${OGRE_LIBRARY}")
+        message(STATUS "    ${OGRE_LIBRARY_SCENEMANAGER}")
+        message(STATUS "    ${OGRE_LIBRARY_PARTICLEFX}")
 
-  include_directories(${OGRE_INCLUDE_DIR})
-  link_directories(${OGRE_LIBRARY_DIR})
-
+        if (TUNDRA_PLATFORM_ANDROID)
+            find_library(OGRE_LIBRARY_GLES2 RenderSystem_GLES2Static
+                HINTS ${ENV_OGRE_HOME}/lib/OGRE ${ENV_NAALI_DEP_PATH}/lib/OGRE)
+            message(STATUS "    ${OGRE_LIBRARY_GLES2}")
+        endif ()
+        message("")
+        
+    endif ()
+    
+    include_directories(${OGRE_INCLUDE_DIR})
+    link_directories(${OGRE_LIBRARY_DIR})
 endmacro()
     
 else() # Windows Ogre lookup.
@@ -113,6 +144,13 @@ macro(link_ogre)
             target_link_libraries(${TARGET_NAME} optimized OgreMain)
         endif()
     else()
-        target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY})
+        if (NOT TUNDRA_OGRE_STATIC)
+            target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY})
+        else ()
+            target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY})
+            target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_SCENEMANAGER})
+            target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_PARTICLEFX})
+            target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_GLES2})
+        endif ()
     endif()
 endmacro()
