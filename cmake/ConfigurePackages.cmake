@@ -68,11 +68,19 @@ endif()
 endmacro (configure_boost)
 
 macro (configure_qt4)
-    sagase_configure_package (QT4 
-        NAMES Qt4 4.6.1
-        COMPONENTS QtCore QtGui QtWebkit QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative
-        PREFIXES ${ENV_TUNDRA_DEP_PATH} ${ENV_QT_DIR})
-
+    
+    if (TUNDRA_PLATFORM_ANDROID)
+        sagase_configure_package (QT4 
+            NAMES Qt4
+            COMPONENTS QtCore QtGui QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative
+            PREFIXES ${ENV_QT_DIR})
+    else ()
+        sagase_configure_package (QT4 
+            NAMES Qt4 4.6.1
+            COMPONENTS QtCore QtGui QtWebkit QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative
+            PREFIXES ${ENV_TUNDRA_DEP_PATH} ${ENV_QT_DIR})
+    endif ()
+    
     # FindQt4.cmake
     if (QT4_FOUND AND QT_USE_FILE)
     
@@ -110,8 +118,8 @@ macro (configure_qt4)
 #            ${QT_QTSCRIPTTOOLS_LIBRARY}
 #            ${QT_PHONON_LIBRARY}
         
-    endif ()
-    
+    endif ()  
+
     sagase_configure_report (QT4)
 endmacro (configure_qt4)
 
