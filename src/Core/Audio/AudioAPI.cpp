@@ -18,6 +18,7 @@
 #include "Math/float3.h"
 #include "ConfigAPI.h"
 
+#ifndef TUNDRA_NO_AUDIO
 #ifndef Q_WS_MAC
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -25,6 +26,10 @@
 #include <al.h>
 #include <alc.h>
 #endif
+#else // TUNDRA_NO_AUDIO
+class ALCcontext;
+class ALCdevice;
+#endif // TUNDRA_NO_AUDIO
 
 #include "MemoryLeakCheck.h"
 
@@ -72,11 +77,13 @@ public:
     std::map<SoundChannel::SoundType, float> soundMasterGain;
 };
 
-AudioAPI::AudioAPI(Framework *fw, AssetAPI *assetAPI_)
-:impl(new AudioApiImpl),
-assetAPI(assetAPI_)
+AudioAPI::AudioAPI(Framework *fw, AssetAPI *assetAPI_) :
+    assetAPI(assetAPI_),
+    impl(0)
 {
+#ifndef TUNDRA_NO_AUDIO
     assert(assetAPI);
+    impl = new AudioApiImpl();
     impl->initialized = false;
     impl->masterGain = 1.f;
     impl->context = 0;
@@ -105,6 +112,9 @@ assetAPI(assetAPI_)
         assetAPI->RegisterAssetTypeFactory(AssetTypeFactoryPtr(new GenericAssetFactory<AudioAsset>("Audio")));
     else
         assetAPI->RegisterAssetTypeFactory(AssetTypeFactoryPtr(new NullAssetFactory("Audio")));
+#else
+    assetAPI->RegisterAssetTypeFactory(AssetTypeFactoryPtr(new NullAssetFactory("Audio")));
+#endif
 }
 
 AudioAPI::~AudioAPI()
@@ -119,6 +129,7 @@ void AudioAPI::Reset()
 
 bool AudioAPI::Initialize(const QString &playbackDeviceName)
 {
+#ifndef TUNDRA_NO_AUDIO
     if (impl && impl->initialized)
         Uninitialize();
     
@@ -147,12 +158,15 @@ bool AudioAPI::Initialize(const QString &playbackDeviceName)
         LogInfo("Opened OpenAL playback device '" + playbackDeviceName + "'.");
     impl->initialized = true;
     return true;
+#else
+    return false;
+#endif
 }
 
 QStringList AudioAPI::GetPlaybackDevices() const
 {
     QStringList names;
-    
+#ifndef TUNDRA_NO_AUDIO
     const char *deviceNames = alcGetString(NULL, ALC_DEVICE_SPECIFIER);
     if (deviceNames)
     {
@@ -162,12 +176,13 @@ QStringList AudioAPI::GetPlaybackDevices() const
             deviceNames += strlen(deviceNames) + 1;
         }
     }
-    
+#endif
     return names;
 }
 
 AudioAssetPtr AudioAPI::CreateAudioAssetFromSoundBuffer(const SoundBuffer &buffer) const
 {
+#ifndef TUNDRA_NO_AUDIO
     // Construct a sound from the buffer
     AudioAssetPtr new_sound(new AudioAsset(assetAPI, "Audio", "buffer"));
     new_sound->LoadFromSoundBuffer(buffer);
@@ -177,10 +192,14 @@ AudioAssetPtr AudioAPI::CreateAudioAssetFromSoundBuffer(const SoundBuffer &buffe
         return AudioAssetPtr();
 
     return new_sound;
+#else
+    return AudioAssetPtr();
+#endif
 }
 
 void AudioAPI::Uninitialize()
 {
+#ifndef TUNDRA_NO_AUDIO
     if (!impl)
         return;
 
@@ -201,12 +220,13 @@ void AudioAPI::Uninitialize()
     }
     
     impl->initialized = false;
+#endif
 }
 
 std::vector<SoundChannelPtr> AudioAPI::GetActiveSounds() const
 {
     std::vector<SoundChannelPtr> ret;
-    
+#ifndef TUNDRA_NO_AUDIO    
     SoundChannelMap::const_iterator i = impl->channels.begin();
     while(i != impl->channels.end())
     {
@@ -214,18 +234,19 @@ std::vector<SoundChannelPtr> AudioAPI::GetActiveSounds() const
             ret.push_back(i->second);
         ++i;
     }
-    
+#endif    
     return ret;
 }
 
 void AudioAPI::Update(f64 frametime)
 {   
+#ifndef TUNDRA_NO_AUDIO
     if (!impl || !impl->initialized)
         return;
     
     PROFILE(AudioAPI_Update);
 
-//        mutex.lock();
+    //mutex.lock();
     std::vector<SoundChannelMap::iterator> channelsToDelete;
 
     // Update listener position/orientation to sound device
@@ -252,7 +273,8 @@ void AudioAPI::Update(f64 frametime)
     for(uint j = 0; j < channelsToDelete.size(); ++j)
         impl->channels.erase(channelsToDelete[j]);   
     
- //   mutex.unlock();
+    //mutex.unlock();
+ #endif
 }
 
 bool AudioAPI::IsInitialized() const
@@ -345,7 +367,7 @@ SoundChannelPtr AudioAPI::PlaySound3D(const float3 &position, AssetPtr audioAsse
 
 SoundChannelPtr AudioAPI::PlaySoundBuffer(const SoundBuffer &buffer, SoundChannel::SoundType type, SoundChannelPtr channel)
 {
-    if (!impl->initialized)
+    if (!impl || !impl->initialized)
         return SoundChannelPtr();
         
     if (!channel)
@@ -366,7 +388,7 @@ SoundChannelPtr AudioAPI::PlaySoundBuffer(const SoundBuffer &buffer, SoundChanne
 
 SoundChannelPtr AudioAPI::PlaySoundBuffer3D(const SoundBuffer &buffer, SoundChannel::SoundType type, const float3 &position, SoundChannelPtr channel)
 {
-    if (!impl->initialized)
+    if (!impl || !impl->initialized)
         return SoundChannelPtr();
         
     if (!channel)
@@ -388,14 +410,15 @@ SoundChannelPtr AudioAPI::PlaySoundBuffer3D(const SoundBuffer &buffer, SoundChan
 
 void AudioAPI::Stop(SoundChannelPtr channel) const
 {
+#ifndef TUNDRA_NO_AUDIO
     if (channel)
         channel->Stop();
+#endif
 }
 
 sound_id_t AudioAPI::GetNextSoundChannelID() const
 {
-    assert(impl);
-    if (!impl)
+    if (!impl || !impl->initialized)
         return 0;
 
     for(;;)
@@ -413,6 +436,9 @@ sound_id_t AudioAPI::GetNextSoundChannelID() const
 
 void AudioAPI::SetMasterGain(float masterGain)
 {
+    if (!impl || !impl->initialized)
+        return;
+
     impl->masterGain = masterGain;
     ApplyMasterGain();
 }
@@ -424,6 +450,9 @@ float AudioAPI::GetMasterGain() const
 
 void AudioAPI::SetSoundMasterGain(SoundChannel::SoundType type, float masterGain)
 {
+    if (!impl || !impl->initialized)
+        return;
+        
     impl->soundMasterGain[type] = masterGain;
     ApplyMasterGain();
 }
@@ -435,6 +464,9 @@ float AudioAPI::GetSoundMasterGain(SoundChannel::SoundType type) const
 
 void AudioAPI::ApplyMasterGain()
 {
+    if (!impl || !impl->initialized)
+        return;
+        
     SoundChannelMap::iterator i = impl->channels.begin();
     while(i != impl->channels.end())
     {
@@ -446,7 +478,7 @@ void AudioAPI::ApplyMasterGain()
 QStringList AudioAPI::GetRecordingDevices() const
 {
     QStringList names;
-    
+#ifndef TUNDRA_NO_AUDIO
     const char *capture_device_names = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER);
     if (capture_device_names)
     {
@@ -456,12 +488,13 @@ QStringList AudioAPI::GetRecordingDevices() const
             capture_device_names += strlen(capture_device_names) + 1;
         }
     }
-    
+#endif
     return names;
 }
 
 bool AudioAPI::StartRecording(const QString &name, uint frequency, bool sixteenbit, bool stereo, uint buffer_size)
 {
+#ifndef TUNDRA_NO_AUDIO
     if (!impl || !impl->initialized)
         return false;
     
@@ -505,30 +538,40 @@ bool AudioAPI::StartRecording(const QString &name, uint frequency, bool sixteenb
     
     LogInfo("Opened OpenAL recording device " + name);
     return true;
+#else
+    return false;
+#endif
 }
 
 void AudioAPI::StopRecording()
 {
+#ifndef TUNDRA_NO_AUDIO
     if (impl && impl->captureDevice)
     {
         alcCaptureStop(impl->captureDevice);
         alcCaptureCloseDevice(impl->captureDevice);
         impl->captureDevice = 0;
     }
+#endif
 }
 
 uint AudioAPI::GetRecordedSoundSize() const
 {
+#ifndef TUNDRA_NO_AUDIO
     if (!impl || !impl->captureDevice)
         return 0;
     
     ALCint samples;
     alcGetIntegerv(impl->captureDevice, ALC_CAPTURE_SAMPLES, 1, &samples);
     return samples * impl->captureSampleSize;
+#else
+    return 0;
+#endif
 }
 
 uint AudioAPI::GetRecordedSoundData(void* buffer, uint size)
 {
+#ifndef TUNDRA_NO_AUDIO
     if (!impl || !impl->captureDevice)
         return 0;
     
@@ -540,4 +583,8 @@ uint AudioAPI::GetRecordedSoundData(void* buffer, uint size)
     
     alcCaptureSamples(impl->captureDevice, buffer, samples);
     return samples * impl->captureSampleSize;
+#else
+    return 0;
+#endif
 }
+

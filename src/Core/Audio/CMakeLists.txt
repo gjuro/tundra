@@ -10,6 +10,12 @@ file(GLOB CPP_FILES *.cpp)
 file(GLOB H_FILES *.h)
 file(GLOB MOC_FILES AudioAsset.h SoundChannel.h SoundSettings.h AudioAPI.h)
 
+# Exclude sources if null impl
+if (TUNDRA_NO_AUDIO)
+    list (REMOVE_ITEM CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/OggVorbisLoader.cpp ${CMAKE_CURRENT_SOURCE_DIR}/WavLoader.cpp)
+    list (REMOVE_ITEM H_FILES ${CMAKE_CURRENT_SOURCE_DIR}/OggVorbisLoader.h ${CMAKE_CURRENT_SOURCE_DIR}/WavLoader.h)
+endif ()
+
 set(SOURCE_FILES ${CPP_FILES} ${H_FILES})
 
 QT4_WRAP_CPP(MOC_SRCS ${MOC_FILES})

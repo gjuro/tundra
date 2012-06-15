@@ -2,14 +2,17 @@
 
 #include "DebugOperatorNew.h"
 #include "AssetAPI.h"
-#include <QList>
 #include "MemoryLeakCheck.h"
 #include "AudioAsset.h"
 #include "LoggingFunctions.h"
-#include "WavLoader.h"
-#include "OggVorbisLoader.h"
 
 #include <QString>
+#include <QList>
+
+#ifndef TUNDRA_NO_AUDIO
+
+#include "WavLoader.h"
+#include "OggVorbisLoader.h"
 
 #ifndef Q_WS_MAC
 #include <AL/al.h>
@@ -18,6 +21,8 @@
 #include <al.h>
 #include <alc.h>
 #endif
+
+#endif // TUNDRA_NO_AUDIO
 
 AudioAsset::AudioAsset(AssetAPI *owner, const QString &type_, const QString &name_)
 :IAsset(owner, type_, name_), handle(0)
@@ -31,16 +36,19 @@ AudioAsset::~AudioAsset()
 
 void AudioAsset::DoUnload()
 {
+#ifndef TUNDRA_NO_AUDIO
     if (handle)
     {
         alDeleteBuffers(1, &handle);
         handle = 0;
     }
+#endif
 }
 
 bool AudioAsset::DeserializeFromData(const u8 *data, size_t numBytes, bool allowAsynchronous)
 {
     bool loadResult = false;
+#ifndef TUNDRA_NO_AUDIO
     if (WavLoader::IdentifyWavFileInMemory(data, numBytes) && this->Name().endsWith(".wav", Qt::CaseInsensitive)) // Detect whether this file is Wav data or not.
     {
         loadResult = LoadFromWavFileInMemory(data, numBytes);
@@ -55,32 +63,41 @@ bool AudioAsset::DeserializeFromData(const u8 *data, size_t numBytes, bool allow
     }
     else
         LogError("Unable to serialize audio asset data. Unknown format!");
-
+#endif
     return loadResult;
 }
 
 bool AudioAsset::LoadFromWavFileInMemory(const u8 *data, size_t numBytes)
 {
+#ifndef TUNDRA_NO_AUDIO
     SoundBuffer buf;
     bool success = WavLoader::LoadWavFileToSoundBuffer(data, numBytes, buf);
     if (!success || buf.data.size() == 0)
         return false;
 
     return LoadFromRawPCMWavData(&buf.data[0], buf.data.size(), buf.stereo, buf.is16Bit, buf.frequency);
+#else
+    return false;
+#endif
 }
 
 bool AudioAsset::LoadFromOggVorbisFileInMemory(const u8 *data, size_t numBytes)
 {
+#ifndef TUNDRA_NO_AUDIO
     SoundBuffer buf;
     bool success = OggVorbisLoader::LoadOggVorbisFileToSoundBuffer(data, numBytes, buf);
     if (!success || buf.data.size() == 0)
         return false;
 
     return LoadFromRawPCMWavData(&buf.data[0], buf.data.size(), buf.stereo, buf.is16Bit, buf.frequency);
+#else
+    return false;
+#endif
 }
 
 bool AudioAsset::LoadFromRawPCMWavData(const u8 *data, size_t numBytes, bool stereo, bool is16Bit, int frequency)
 {
+#ifndef TUNDRA_NO_AUDIO
     // Clean up the previous OpenAL audio buffer handle, if old data existed.
     DoUnload();
 
@@ -114,10 +131,14 @@ bool AudioAsset::LoadFromRawPCMWavData(const u8 *data, size_t numBytes, bool ste
         return false;
     }
     return true;
+#else
+    return false;
+#endif
 }
 
 bool AudioAsset::LoadFromSoundBuffer(const SoundBuffer &buffer)
 {
+#ifndef TUNDRA_NO_AUDIO
     if (buffer.data.size() == 0)
     {
         LogError("Null data passed in AudioAsset::LoadFromSoundBuffer!");
@@ -125,10 +146,14 @@ bool AudioAsset::LoadFromSoundBuffer(const SoundBuffer &buffer)
     }
 
     return LoadFromRawPCMWavData(&buffer.data[0], buffer.data.size(), buffer.stereo, buffer.is16Bit, buffer.frequency);
+#else
+    return false;
+#endif
 }
 
 bool AudioAsset::CreateBuffer()
 {
+#ifndef TUNDRA_NO_AUDIO
     if (!handle)
         alGenBuffers(1, &handle);
     
@@ -139,6 +164,9 @@ bool AudioAsset::CreateBuffer()
     } 
     
     return true;
+#else
+    return false;
+#endif
 }
 
 bool AudioAsset::IsLoaded() const
