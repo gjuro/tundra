@@ -20,18 +20,22 @@ add_definitions(-DAUDIO_API_EXPORTS)
 # Define AUDIO_API_DLL if we are building the Audio project as a shared library.
 #add_definitions(-DAUDIO_API_DLL)
 
-use_package(OPENAL)
-use_package_ogg()
-use_package_vorbis()
+if (NOT TUNDRA_NO_AUDIO)
+    use_package(OPENAL)
+    use_package_ogg()
+    use_package_vorbis()
+endif ()
 
 build_library(${TARGET_NAME} STATIC ${SOURCE_FILES} ${MOC_SRCS})
 # Use the SHARED option if we are building Audio project as a shared library.
 #build_library(${TARGET_NAME} SHARED ${SOURCE_FILES} ${MOC_SRCS})
 
+if (NOT TUNDRA_NO_AUDIO)
+    link_package(OPENAL)
+    link_package_ogg()
+    link_package_vorbis()
+endif ()
 link_package(QT4)
-link_package(OPENAL)
-link_package_ogg()
-link_package_vorbis()
 link_modules(Framework Math Asset)
 
 SetupCompileFlags()

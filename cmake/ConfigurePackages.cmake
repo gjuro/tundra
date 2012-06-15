@@ -94,12 +94,14 @@ macro (configure_qt4)
             ${QT_QTNETWORK_INCLUDE_DIR}
             ${QT_QTXML_INCLUDE_DIR}
             ${QT_QTSCRIPT_INCLUDE_DIR}
-            ${QT_DECLARATIVE_INCLUDE_DIR}
-            ${QT_QTWEBKIT_INCLUDE_DIR})
-            
-#            ${QT_QTSCRIPTTOOLS_INCLUDE_DIR}
-#            ${QT_PHONON_INCLUDE_DIR}
+            ${QT_DECLARATIVE_INCLUDE_DIR})
 
+            #${QT_QTSCRIPTTOOLS_INCLUDE_DIR}
+            #${QT_PHONON_INCLUDE_DIR}
+            
+        if (NOT TUNDRA_PLATFORM_ANDROID)
+            set (QT4_INCLUDE_DIRS ${QT4_INCLUDE_DIRS} ${QT_QTWEBKIT_INCLUDE_DIR})
+        endif ()
         
         set (QT4_LIBRARY_DIR  
             ${QT_LIBRARY_DIR})
@@ -112,11 +114,14 @@ macro (configure_qt4)
             ${QT_QTNETWORK_LIBRARY}
             ${QT_QTXML_LIBRARY}
             ${QT_QTSCRIPT_LIBRARY}
-            ${QT_DECLARATIVE_LIBRARY}
-            ${QT_QTWEBKIT_LIBRARY})
-            
-#            ${QT_QTSCRIPTTOOLS_LIBRARY}
-#            ${QT_PHONON_LIBRARY}
+            ${QT_DECLARATIVE_LIBRARY})
+        
+            #${QT_QTSCRIPTTOOLS_LIBRARY}
+            #${QT_PHONON_LIBRARY}
+
+        if (NOT TUNDRA_PLATFORM_ANDROID)
+            set (QT4_LIBRARIES ${QT4_LIBRARIES} ${QT_QTWEBKIT_LIBRARY})
+        endif ()
         
     endif ()  
 
@@ -241,7 +246,7 @@ macro(link_package_skyx)
 endmacro()
 
 macro (configure_qtpropertybrowser)
-    if (NOT MSVC)
+    if (NOT MSVC AND NOT TUNDRA_NO_EDITORS)
       sagase_configure_package (QT_PROPERTY_BROWSER
           NAMES QtPropertyBrowser QtSolutions_PropertyBrowser-2.5
           COMPONENTS QtPropertyBrowser QtSolutions_PropertyBrowser-2.5
@@ -252,21 +257,23 @@ macro (configure_qtpropertybrowser)
 endmacro (configure_qtpropertybrowser)
 
 macro (configure_openal)
-    sagase_configure_package(OPENAL
-        NAMES OpenAL openal
-        COMPONENTS al OpenAL32
-        PREFIXES ${ENV_TUNDRA_DEP_PATH}/OpenAL ${ENV_TUNDRA_DEP_PATH}/OpenAL/libs/Win32)
+    if (NOT TUNDRA_NO_AUDIO)
+        sagase_configure_package(OPENAL
+            NAMES OpenAL openal
+            COMPONENTS al OpenAL32
+            PREFIXES ${ENV_TUNDRA_DEP_PATH}/OpenAL ${ENV_TUNDRA_DEP_PATH}/OpenAL/libs/Win32)
 
-        if (OPENAL_FOUND)
-            set (OPENAL_LIBRARIES ${OPENAL_LIBRARY})
-            set (OPENAL_INCLUDE_DIRS ${OPENAL_INCLUDE_DIR})
-        endif()
+            if (OPENAL_FOUND)
+                set (OPENAL_LIBRARIES ${OPENAL_LIBRARY})
+                set (OPENAL_INCLUDE_DIRS ${OPENAL_INCLUDE_DIR})
+            endif()
 
-        # Force include dir on MSVC
-        if (MSVC)
-             set (OPENAL_INCLUDE_DIRS ${ENV_TUNDRA_DEP_PATH}/OpenAL/include)
-        endif ()
-    sagase_configure_report (OPENAL)
+            # Force include dir on MSVC
+            if (MSVC)
+                 set (OPENAL_INCLUDE_DIRS ${ENV_TUNDRA_DEP_PATH}/OpenAL/include)
+            endif ()
+        sagase_configure_report (OPENAL)
+    endif ()
 endmacro (configure_openal)
 
 macro (configure_sparkle)
@@ -440,7 +447,7 @@ macro(link_package_theora)
 endmacro()
 
 macro(use_package_qtpropertybrowser)
-    if (MSVC)
+    if (MSVC AND NOT TUNDRA_NO_EDITORS)
         include_directories(${ENV_TUNDRA_DEP_PATH}/qt-solutions/qtpropertybrowser/src) # For full-built deps.
         include_directories(${ENV_TUNDRA_DEP_PATH}/qtpropertybrowser/include) # For prebuilt deps mirrored from full-built deps.
         include_directories(${ENV_TUNDRA_DEP_PATH}/QtPropertyBrowser/includes) # For prebuilt deps vs2008.
@@ -450,7 +457,7 @@ macro(use_package_qtpropertybrowser)
 endmacro()
 
 macro(link_package_qtpropertybrowser)
-    if (MSVC)
+    if (MSVC AND NOT TUNDRA_NO_EDITORS)
         target_link_libraries(${TARGET_NAME} debug QtSolutions_PropertyBrowser-headd.lib)
         target_link_libraries(${TARGET_NAME} optimized QtSolutions_PropertyBrowser-head.lib)
     endif()

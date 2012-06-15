@@ -55,11 +55,11 @@ endmacro ()
 macro(AddEntityComponent componentName)
     # Chekc if the component is in our default entity components location
     # note: from cmake docs: IS_DIRECTORY Behavior is well-defined only for full paths.
-    if (IS_DIRECTORY ${PROJECT_BINARY_DIR}/src/EntityComponents/${componentName})
+    if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/EntityComponents/${componentName})
         add_subdirectory (src/EntityComponents/${componentName})
         set (${componentName}_ENABLED 1)
         set (USED_ENTITYCOMPONENTS ${USED_ENTITYCOMPONENTS} ${componentName})
-    elseif (IS_DIRECTORY ${PROJECT_BINARY_DIR}/${componentName})
+    elseif (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${componentName})
         add_subdirectory (${componentName})
         GetLastElementFromPath(${componentName} compNameFromRelPath)
         set(${compNameFromRelPath}_ENABLED 1)
@@ -210,13 +210,6 @@ else ()
     add_definitions (-Wall -Wextra -Wno-unknown-pragmas -Wno-unused -Wno-reorder -Wno-switch -Wno-write-strings)
 endif()
 
-if (TUNDRA_PLATFORM_ANDROID)
-    add_definitions(-DTUNDRA_PLATFORM_ANDROID)
-endif ()
-if (TUNDRA_OGRE_STATIC)
-    add_definitions(-DTUNDRA_OGRE_STATIC)
-endif ()
-
 # Set CMake custom module path & include them
 # The following CMake modules are required for the project to build.
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -237,6 +230,20 @@ if (MSVC)
 else()
     add_definitions(-DUNIX) # Currently, kNet uses this flag for Unix OSes. (required also for client-side headers). TODO: Clean this up so it's not required.
 endif()
+
+# Build preprocessor defines from cmake parameters
+if (TUNDRA_PLATFORM_ANDROID)
+    add_definitions(-DTUNDRA_PLATFORM_ANDROID)
+endif ()
+if (TUNDRA_OGRE_STATIC)
+    add_definitions(-DTUNDRA_OGRE_STATIC)
+endif ()
+if (TUNDRA_NO_EDITORS)
+    add_definitions(-DTUNDRA_NO_EDITORS)
+endif ()
+if (TUNDRA_NO_AUDIO)
+    add_definitions(-DTUNDRA_NO_AUDIO)
+endif ()
 
 # On all platforms, we enable PCH files by default.
 add_definitions (-DPCH_ENABLED)
