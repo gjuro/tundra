@@ -6,10 +6,30 @@
 
 #include "Win.h"
 
+#ifdef TUNDRA_PLATFORM_ANDROID
+#include "android/log.h"
+#define __android_tundra_info(...) ((void)__android_log_print(ANDROID_LOG_INFO, "Tundra", __VA_ARGS__))
+#define __android_tundra_warning(...) ((void)__android_log_print(ANDROID_LOG_WARN, "Tundra", __VA_ARGS__))
+#define __android_tundra_error(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "Tundra", __VA_ARGS__))
+#define __android_tundra_debug(...) ((void)__android_log_print(ANDROID_LOG_DEBUG, "Tundra", __VA_ARGS__))
+#endif
+
 void PrintLogMessage(u32 logChannel, const char *str)
 {
     if (!IsLogChannelEnabled(logChannel))
         return;
+
+#ifdef TUNDRA_PLATFORM_ANDROID
+    if (logChannel == LogChannelInfo)
+        __android_tundra_info(str);
+    else if (logChannel == LogChannelWarning)
+        __android_tundra_warning(str);
+    else if (logChannel == LogChannelError)
+        __android_tundra_error(str);
+    else if (logChannel == LogChannelDebug)
+        __android_tundra_debug(str);
+    return;
+#endif
 
     Framework *instance = Framework::Instance();
     ConsoleAPI *console = (instance ? instance->Console() : 0);

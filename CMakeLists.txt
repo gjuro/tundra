@@ -253,21 +253,41 @@ endif ()
 add_definitions (-DPCH_ENABLED)
 SET(PCH_ENABLED 1)
 
-# Set global hardcoded install prefix. User cannot change this at the moment, untill we figure how we want to use this!
-# Call the cleanup step that cleans the install prefix before every installations. This is important as module setups might change between builds.
-set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
+message("")
+message("Processing CMAKE_INSTALL_PREFIX")
+# Always force on windows!
+if (MSVC)
+    set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
+endif ()
+# See if already defined via -DCMAKE_INSTALL_PREFIX or cache (?)
+if (NOT CMAKE_INSTALL_PREFIX)
+    message(STATUS "Setting default Tundra install prefix")
+    set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
+# On apple force, no idea what would be sane in osx.
+elseif (APPLE)
+    message(STATUS "Setting default Tundra install prefix (OSX ignored CMAKE_INSTALL_PREFIX atm)")
+    set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
+# If unix or android, check and override /usr/local as its not very 
+# sensible for us with all our data assets etc. For purely SDK build it would be fine though.
+elseif (UNIX OR TUNDRA_PLATFORM_ANDROID)
+    if ("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
+        message(STATUS "Setting default Tundra install prefix over default unix /usr/local")
+        set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
+    else ()
+        message(STATUS "Using passed Tundra install prefix")
+    endif ()
+# Use what got passed.
+else ()
+    message(STATUS "Using passed Tundra install prefix")
+endif ()
+message(STATUS "${CMAKE_INSTALL_PREFIX}")
+
 set (TUNDRA_BIN ${PROJECT_BINARY_DIR}/bin)
 setup_clean_install_step()
 
 # This setting affects only windows. Possibility to opt out of linking agains DirecX spesific libs.
 # Enabled more efficient texture blitting to Ogre using DirectX. This makes RenderSystem_Direct3D9 mandatory.
 set (ENABLE_DIRECTX 1)
-
-# Set global hardcoded install prefix. User cannot change this at the moment, until we figure how we want to use this!
-# Call the cleanup step that cleans the install prefix before every installations. This is important as module setups might change between builds.
-set (CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/build)
-set (TUNDRA_BIN ${PROJECT_BINARY_DIR}/bin)
-setup_clean_install_step()
 
 # Set normalized path for common environment variables
 # If you want to use custom built dependencies along side with TUNDRA_DEP_PATH
