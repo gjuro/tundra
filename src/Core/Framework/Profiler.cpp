@@ -20,6 +20,8 @@ bool ProfilerBlock::QueryCapability()
     return result != 0;
 #elif defined(_POSIX_C_SOURCE)
     return true;
+#elif defined(TUNDRA_PLATFORM_ANDROID)
+    return false;
 #endif
 }
 

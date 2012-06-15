@@ -16,8 +16,11 @@
 #include "IAssetTransfer.h"
 #include "AssetReference.h"
 #include "BinaryAsset.h"
+
+#ifndef TUNDRA_NO_EDITORS
 #include "../../Core/ECEditorModule/SupportedFileTypes.h"
 #include "../../Core/ECEditorModule/AssetsWindow.h"
+#endif
 
 #include "Entity.h"
 
@@ -439,6 +442,7 @@ void AvatarEditor::changeEvent(QEvent* e)
 
 void AvatarEditor::OpenAvatarAsset()
 {
+#ifndef TUNDRA_NO_EDITORS
     previousAvatar_ = avatarAsset_;
 
     AssetsWindow *assetsWindow = new AssetsWindow("Avatar", framework, framework->Ui()->MainWindow());
@@ -448,6 +452,9 @@ void AvatarEditor::OpenAvatarAsset()
     assetsWindow->setAttribute(Qt::WA_DeleteOnClose);
     assetsWindow->setWindowFlags(Qt::Tool);
     assetsWindow->show();
+#else
+    LogWarning("AvatarEditor::OpenAvatarAsset: Built without editors, cannot open avatar asset.");
+#endif
 }
 
 void AvatarEditor::HandleAssetPicked(AssetPtr avatarAsset)
@@ -565,11 +572,15 @@ void AvatarEditor::RemoveAttachment()
 
 void AvatarEditor::OpenAttachmentAsset()
 {
+#ifndef TUNDRA_NO_EDITORS
     AssetsWindow *assetsWindow = new AssetsWindow("AvatarAttachment", framework, framework->Ui()->MainWindow());
     connect(assetsWindow, SIGNAL(AssetPicked(AssetPtr)), SLOT(HandleAttachmentPicked(AssetPtr)));
     assetsWindow->setAttribute(Qt::WA_DeleteOnClose);
     assetsWindow->setWindowFlags(Qt::Tool);
     assetsWindow->show();
+#else
+    LogWarning("AvatarEditor::OpenAttachmentAsset: Built without editors, cannot open avatar attachement.");
+#endif
 }
 
 void AvatarEditor::HandleAttachmentPicked(AssetPtr attachmentAsset)

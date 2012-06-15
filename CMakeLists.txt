@@ -233,6 +233,7 @@ endif()
 
 # Build preprocessor defines from cmake parameters
 if (TUNDRA_PLATFORM_ANDROID)
+    set (TUNDRA_NO_QTWEBKIT TRUE)
     add_definitions(-DTUNDRA_PLATFORM_ANDROID)
 endif ()
 if (TUNDRA_OGRE_STATIC)
@@ -243,6 +244,9 @@ if (TUNDRA_NO_EDITORS)
 endif ()
 if (TUNDRA_NO_AUDIO)
     add_definitions(-DTUNDRA_NO_AUDIO)
+endif ()
+if (TUNDRA_NO_QTWEBKIT)
+    add_definitions(-DTUNDRA_NO_QTWEBKIT)
 endif ()
 
 # On all platforms, we enable PCH files by default.
@@ -341,6 +345,10 @@ link_directories (${CORE_MODULE_DIRECTORY}/Input)
 link_directories (${CORE_MODULE_DIRECTORY}/Ui)
 link_directories (${CORE_MODULE_DIRECTORY}/Asset)
 link_directories (${CORE_MODULE_DIRECTORY}/Scene)
+
+if (TUNDRA_PLATFORM_ANDROID)
+    link_libraries(log c)
+endif ()
 
 # If the custom optional modules configuration file does not yet
 # exist, create it from the template file.

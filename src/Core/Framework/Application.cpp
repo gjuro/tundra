@@ -19,8 +19,11 @@
 #include <QTranslator>
 #include <QLocale>
 #include <QIcon>
-#include <QWebSettings>
 #include <QSplashScreen>
+
+#ifndef TUNDRA_NO_QTWEBKIT
+#include <QWebSettings>
+#endif
 
 #if defined(_WINDOWS)
 #include "Win.h"
@@ -120,7 +123,10 @@ Application::Application(Framework *owner, int &argc, char **argv) :
     QString default_language = framework->Config()->Get(ConfigAPI::FILE_FRAMEWORK, ConfigAPI::SECTION_FRAMEWORK, "language").toString();
     ChangeLanguage(default_language);
 
-    QWebSettings::globalSettings()->setAttribute(QWebSettings::PluginsEnabled, true); //enable flash
+#ifndef TUNDRA_NO_QTWEBKIT
+    // Enable flash etc.
+    QWebSettings::globalSettings()->setAttribute(QWebSettings::PluginsEnabled, true);
+#endif
 
     ReadTargetFpsLimitFromConfig();
 }

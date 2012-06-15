@@ -42,6 +42,10 @@ endif()
 
 link_modules (Framework Scene Console)
 
+if (TUNDRA_PLATFORM_ANDROID)
+    target_link_libraries(${TARGET_NAME} log z m dl c gcc z m dl)
+endif ()
+
 final_target ()
 
 # Install files

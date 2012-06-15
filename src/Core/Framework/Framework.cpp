@@ -52,6 +52,8 @@ struct CommandLineParameterMap
             hstdout = GetStdHandle(STD_OUTPUT_HANDLE);
             if (GetConsoleScreenBufferInfo(hstdout, &csbiInfo))
                 maxLineWidth = csbiInfo.dwSize.X;
+#elif defined(TUNDRA_PLATFORM_ANDROID)
+            int maxLineWidth = 80; // No console on the device, give something.
 #else
             struct winsize w;
             ioctl(0, TIOCGWINSZ, &w);

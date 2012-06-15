@@ -21,7 +21,7 @@ macro(configure_ogre)
     if (NOT TUNDRA_OGRE_STATIC)
         find_library(OGRE_LIBRARY OgreMain
             HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
-    else ()
+    else ()       
         find_library(OGRE_LIBRARY OgreMainStatic
             HINTS ${ENV_OGRE_HOME}/lib ${ENV_NAALI_DEP_PATH}/lib)
         find_library(OGRE_LIBRARY_SCENEMANAGER Plugin_OctreeSceneManagerStatic
@@ -45,7 +45,6 @@ macro(configure_ogre)
             message(STATUS "    ${OGRE_LIBRARY_GLES2}")
         endif ()
         message("")
-        
     endif ()
     
     include_directories(${OGRE_INCLUDE_DIR})
@@ -151,6 +150,9 @@ macro(link_ogre)
             target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_SCENEMANAGER})
             target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_PARTICLEFX})
             target_link_libraries(${TARGET_NAME} ${OGRE_LIBRARY_GLES2})
+            if (TUNDRA_PLATFORM_ANDROID)
+                target_link_libraries(${TARGET_NAME} FreeImage zzip freetype log z m dl c gcc z m dl)
+            endif ()
         endif ()
     endif()
 endmacro()

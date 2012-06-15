@@ -69,18 +69,17 @@ endmacro (configure_boost)
 
 macro (configure_qt4)
     
-    if (TUNDRA_PLATFORM_ANDROID)
-        sagase_configure_package (QT4 
-            NAMES Qt4
-            COMPONENTS QtCore QtGui QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative
-            PREFIXES ${ENV_QT_DIR})
-    else ()
-        sagase_configure_package (QT4 
-            NAMES Qt4 4.6.1
-            COMPONENTS QtCore QtGui QtWebkit QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative
-            PREFIXES ${ENV_TUNDRA_DEP_PATH} ${ENV_QT_DIR})
+    # Define what qt libs we want to find
+    set (TUNDRA_QT_LIBS_TO_FIND QtCore QtGui QtWebkit QtScript QtScriptTools QtXml QtNetwork QtUiTools QtDeclarative)
+    if (TUNDRA_NO_QTWEBKIT)
+        list (REMOVE_ITEM TUNDRA_QT_LIBS_TO_FIND QtWebkit)
     endif ()
     
+    sagase_configure_package (QT4 
+        NAMES Qt4 4.6.1
+        COMPONENTS ${TUNDRA_QT_LIBS_TO_FIND}
+        PREFIXES ${ENV_QT_DIR} ${ENV_TUNDRA_DEP_PATH})
+
     # FindQt4.cmake
     if (QT4_FOUND AND QT_USE_FILE)
     
@@ -99,7 +98,7 @@ macro (configure_qt4)
             #${QT_QTSCRIPTTOOLS_INCLUDE_DIR}
             #${QT_PHONON_INCLUDE_DIR}
             
-        if (NOT TUNDRA_PLATFORM_ANDROID)
+        if (NOT TUNDRA_NO_QTWEBKIT)
             set (QT4_INCLUDE_DIRS ${QT4_INCLUDE_DIRS} ${QT_QTWEBKIT_INCLUDE_DIR})
         endif ()
         
@@ -119,7 +118,7 @@ macro (configure_qt4)
             #${QT_QTSCRIPTTOOLS_LIBRARY}
             #${QT_PHONON_LIBRARY}
 
-        if (NOT TUNDRA_PLATFORM_ANDROID)
+        if (NOT TUNDRA_NO_QTWEBKIT)
             set (QT4_LIBRARIES ${QT4_LIBRARIES} ${QT_QTWEBKIT_LIBRARY})
         endif ()
         

@@ -64,7 +64,7 @@ void PluginAPI::LoadPlugin(const QString &filename)
   #else
     const QString pluginSuffix = ".dll";
   #endif
-#elif defined(_POSIX_C_SOURCE)
+#elif defined(_POSIX_C_SOURCE) || defined(TUNDRA_PLATFORM_ANDROID)
     const QString pluginSuffix = ".so";
 #elif defined(__APPLE__)
     const QString pluginSuffix = ".dylib";
@@ -92,20 +92,22 @@ void PluginAPI::LoadPlugin(const QString &filename)
         return;
     }
 #else
-    char *dlerrstr;
+    
     dlerror();
     PluginHandle module = dlopen(path.toStdString().c_str(), RTLD_GLOBAL|RTLD_LAZY);
-    if ((dlerrstr=dlerror()) != 0)
+    const char *dlerrstrOpen = dlerror();
+    if (dlerrstrOpen != 0)
     {
-        LogError("Failed to load plugin from file \"" + path + "\": Error " + dlerrstr + "!");
+        LogError("Failed to load plugin from file \"" + path + "\": Error " + dlerrstrOpen + "!");
         return;
     }
 
     dlerror();
     TundraPluginMainSignature mainEntryPoint = (TundraPluginMainSignature)dlsym(module, "TundraPluginMain");
-    if ((dlerrstr=dlerror()) != 0)
+    const char *dlerrstrMain = dlerror();
+    if (dlerrstrMain != 0)
     {
-        LogError("Failed to find plugin startup function 'TundraPluginMain' from plugin file \"" + path + "\": Error " + dlerrstr + "!");
+        LogError("Failed to find plugin startup function 'TundraPluginMain' from plugin file \"" + path + "\": Error " + dlerrstrMain + "!");
         return;
     }
 #endif

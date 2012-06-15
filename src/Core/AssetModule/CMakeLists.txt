@@ -22,8 +22,9 @@ build_library (${TARGET_NAME} SHARED ${SOURCE_FILES} ${MOC_SRCS})
 
 link_modules(Framework Math Asset Console TundraProtocolModule)
 
+link_package(QT4)
 if (APPLE)
-link_ogre()
+    link_ogre()
 endif ()
 
 SetupCompileFlagsWithPCH()
