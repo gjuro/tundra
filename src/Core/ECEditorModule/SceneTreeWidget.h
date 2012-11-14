@@ -238,4 +238,49 @@ private slots:
     /// Sets currently selected entities' temporary property.
     /** @param bool temporary Do we want to set or unset the temporary property. */
     void SetAsTemporary(bool temporary);
+
+    /// Deletes selected asset(s) from source.
+    void DeleteFromSource();
+
+    /// Deletes selected assets(s) from cache.
+    void DeleteFromCache();
+
+    /// Forgets selected asset(s).
+    void Forget();
+
+    /// Reload selected asset(s) from source.
+    void ReloadFromSource();
+
+    /// Reload selected asset(s) from cache.
+    void ReloadFromCache();
+
+    /// Unloads selected asset(s).
+    void Unload();
+
+    /// Opens the location folder of an asset in operating system's file explorer.
+    void OpenFileLocation();
+
+    /// Opens the location folder of an asset in operating system's file explorer.
+    void OpenInExternalEditor();
+
+    /// Copies asset reference to clipboard.
+    void CopyAssetRef();
+
+    /// Clones selected asset(s).
+    void Clone();
+
+    /// Exports selected asset(s).
+    void Export();
+
+    /// Opens Request New Asset dialog.
+    void RequestNewAsset();
+
+    /// Creates new programmatic asset.
+    void CreateAsset();
+
+    /// Makes the currently selected asset storage the default system storage.
+    void MakeDefaultStorage();
+
+    /// Removes the currently selected asset storages from the system.
+    void RemoveStorage();
 };

@@ -10,6 +10,10 @@
 #include "SceneFwd.h"
 #include "AssetFwd.h"
 
+class AssetItem;
+class AssetStorageItem;
+struct AssetTreeWidgetSelection;
+
 /// Tree widget item representing an entity.
 class EntityItem : public QTreeWidgetItem
 {
@@ -108,7 +112,8 @@ struct SceneTreeWidgetSelection
 
     QList<EntityItem *> entities; ///< List of selected entities.
     QList<ComponentItem *> components; ///< List of selected components.
-    QList<AssetRefItem *> assets; ///< List of selected asset refs
+    //QList<AssetRefItem *> assets; ///< List of selected asset refs
+    QList<AssetItem *> assets; ///< List of selected assets.
 };
 
 /// Item representing asset in the tree widget.

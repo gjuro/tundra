@@ -35,6 +35,9 @@
 #include "UiAPI.h"
 #include "UiMainWindow.h"
 
+#include "AssetCache.h"
+#include "IAssetTypeFactory.h"
+
 #include <QDomDocument>
 #include <QDomElement>
 #include <QDebug>
@@ -223,8 +226,141 @@ void SceneTreeWidget::AddAvailableAssetActions(QMenu *menu)
 {
     assert(menu);
 
-    SceneTreeWidgetSelection sel = SelectedItems();
+    //SceneTreeWidgetSelection sel = SelectedItems();
+    AssetTreeWidgetSelection sel = SelectedItems();
 
+    if (sel.HasAssets())
+    {
+        QMenu *deleteMenu = new QMenu(tr("Delete"), menu);
+        QAction *deleteSourceAction = new QAction(tr("Delete from source"), deleteMenu);
+        QAction *deleteCacheAction = new QAction(tr("Delete from cache"), deleteMenu);
+        QAction *forgetAction = new QAction(tr("Forget asset"), deleteMenu);
+
+        deleteMenu->addAction(deleteSourceAction);
+        deleteMenu->addAction(deleteCacheAction);
+        deleteMenu->addAction(forgetAction);
+        menu->addMenu(deleteMenu);
+
+        connect(deleteSourceAction, SIGNAL(triggered()), SLOT(DeleteFromSource()));
+        connect(deleteCacheAction, SIGNAL(triggered()), SLOT(DeleteFromCache()));
+        connect(forgetAction, SIGNAL(triggered()), SLOT(Forget()));
+
+        QMenu *reloadMenu = new QMenu(tr("Reload"), menu);
+        QAction *reloadFromSourceAction = new QAction(tr("Reload from source"), deleteMenu);
+        QAction *reloadFromCacheAction = new QAction(tr("Reload from cache"), deleteMenu);
+        QAction *unloadAction = new QAction(tr("Unload"), deleteMenu);
+
+        // Reload from cache & delete from cache are not possible for e.g. local assets don't have a cached version of the asset,
+        // Even if the asset is an HTTP asset, these options are disable if there does not exist a cached version of that asset in the cache.
+        foreach(AssetItem *item, sel.assets)
+            if (item->Asset() && framework->Asset()->GetAssetCache()->FindInCache(item->Asset()->Name()).isEmpty())
+            {
+                reloadFromCacheAction->setDisabled(true);
+                deleteCacheAction->setDisabled(true);
+                break;
+            }
+
+        reloadMenu->addAction(reloadFromSourceAction);
+        reloadMenu->addAction(reloadFromCacheAction);
+        reloadMenu->addAction(unloadAction);
+        menu->addMenu(reloadMenu);
+
+        connect(reloadFromSourceAction, SIGNAL(triggered()), SLOT(ReloadFromSource()));
+        connect(reloadFromCacheAction, SIGNAL(triggered()), SLOT(ReloadFromCache()));
+        connect(unloadAction, SIGNAL(triggered()), SLOT(Unload()));
+
+        QAction *openFileLocationAction = new QAction(tr("Open file location"), menu);
+        menu->addAction(openFileLocationAction);
+        connect(openFileLocationAction, SIGNAL(triggered()), SLOT(OpenFileLocation()));
+
+        QAction *openInExternalEditor = new QAction(tr("Open in external editor"), menu);
+        menu->addAction(openInExternalEditor);
+        connect(openInExternalEditor, SIGNAL(triggered()), SLOT(OpenInExternalEditor()));
+
+        // Delete from Source, Delete from Cache, Reload from Source, Unload, Open File Location, and Open in external editor
+        // are not applicable for assets which have been created programmatically (disk source is empty).
+        ///\todo Currently disk source is empty for unloaded assets, and open file location is disabled for them. This should not happen.
+        foreach(AssetItem *item, sel.assets)
+            if (item->Asset() && item->Asset()->DiskSource().trimmed().isEmpty())
+            {
+                deleteCacheAction->setDisabled(true);
+                // If asset is an external URL, do not disable deleteFromSource & reloadFromSource
+                if (AssetAPI::ParseAssetRef(item->Asset()->Name()) != AssetAPI::AssetRefExternalUrl)
+                {
+                    deleteSourceAction->setDisabled(true);
+                    reloadFromSourceAction->setDisabled(true);
+                }
+                unloadAction->setDisabled(true);
+                openFileLocationAction->setDisabled(true);
+                openInExternalEditor->setDisabled(true);
+                
+                break;
+            }
+
+        menu->addSeparator();
+
+        if (sel.assets.count() == 1)
+        {
+            QAction *copyAssetRefAction = new QAction(tr("Copy asset reference to clipboard"), menu);
+            menu->addAction(copyAssetRefAction);
+            connect(copyAssetRefAction, SIGNAL(triggered()), SLOT(CopyAssetRef()));
+        }
+
+        QAction *cloneAction = new QAction(tr("Clone..."), menu);
+        menu->addAction(cloneAction);
+        connect(cloneAction, SIGNAL(triggered()), SLOT(Clone()));
+
+        QAction *exportAction = new QAction(tr("Export..."), menu);
+        menu->addAction(exportAction);
+        connect(exportAction, SIGNAL(triggered()), SLOT(Export()));
+    }
+
+    QAction *functionsAction = new QAction(tr("Functions..."), menu);
+    connect(functionsAction, SIGNAL(triggered()), SLOT(OpenFunctionDialog()));
+    menu->addAction(functionsAction);
+    // "Functions..." is disabled if we have both assets and storages selected simultaneously.
+    if (sel.HasAssets())// && sel.HasStorages())
+        functionsAction->setDisabled(true);
+
+    QAction *importAction = new QAction(tr("Import..."), menu);
+    connect(importAction, SIGNAL(triggered()), SLOT(Import()));
+    menu->addAction(importAction);
+
+    QAction *requestNewAssetAction = new QAction(tr("Request new asset..."), menu);
+    connect(requestNewAssetAction, SIGNAL(triggered()), SLOT(RequestNewAsset()));
+    menu->addAction(requestNewAssetAction);
+
+    QMenu *createMenu = new QMenu(tr("Create"), menu);
+    menu->addMenu(createMenu);
+    foreach(const AssetTypeFactoryPtr &factory, framework->Asset()->GetAssetTypeFactories())
+    {
+        QAction *createAsset = new QAction(factory->Type(), createMenu);
+        createAsset->setObjectName(factory->Type());
+        connect(createAsset, SIGNAL(triggered()), SLOT(CreateAsset()));
+        createMenu->addAction(createAsset);
+    }
+
+    if (sel.storages.count() == 1)
+    {
+        QAction *makeDefaultStorageAction = new QAction(tr("Make default storage"), menu);
+        connect(makeDefaultStorageAction, SIGNAL(triggered()), SLOT(MakeDefaultStorage()));
+        menu->addAction(makeDefaultStorageAction);
+    }
+
+    if (sel.storages.count() > 0)
+    {
+        QAction *removeStorageAction = new QAction(tr("Remove storage"), menu);
+        connect(removeStorageAction, SIGNAL(triggered()), SLOT(RemoveStorage()));
+        menu->addAction(removeStorageAction);
+    }
+
+    // Let other instances add their possible functionality.
+    // For now, pass only asset items.
+    QList<QObject *> targets;
+    foreach(AssetItem *item, sel.assets)
+        targets.append(item->Asset().get());
+    framework->Ui()->EmitContextMenuAboutToOpen(menu, targets);
+    /*
     // Let other instances add their possible functionality.
     QList<QObject *> targets;
     foreach(AssetRefItem *item, sel.assets)
@@ -250,6 +386,7 @@ void SceneTreeWidget::AddAvailableAssetActions(QMenu *menu)
         connect(action, SIGNAL(triggered()), SLOT(SaveAssetAs()));
         menu->addAction(action);
     }
+    */
 }
 
 void SceneTreeWidget::AddAvailableEntityActions(QMenu *menu)
@@ -1765,4 +1902,205 @@ void SceneTreeWidget::SetAsTemporary(bool temporary)
             item->Entity()->SetTemporary(temporary);
             item->SetText(item->Entity().get());
         }
+}
+
+void SceneTreeWidget::DeleteFromSource()
+{
+    // AssetAPI::DeleteAssetFromStorage() signals will start deletion of tree widget asset items:
+    // Gather the asset refs to a separate list beforehand in order to prevent crash.
+    QStringList assetRefs, assetsToBeDeleted;
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+        {
+            assetRefs << item->Asset()->Name();
+            assetsToBeDeleted << item->Asset()->DiskSource();
+        }
+
+    QMessageBox msgBox(QMessageBox::Warning, tr("Delete From Source"),
+        tr("Are you sure want to delete the selected asset(s) permanently from the source?\n"),
+        QMessageBox::Ok | QMessageBox::Cancel, this);
+    msgBox.setDetailedText(assetsToBeDeleted.join("\n"));
+    int ret = msgBox.exec();
+    if (ret == QMessageBox::Ok)
+        foreach(QString ref, assetRefs)
+            framework->Asset()->DeleteAssetFromStorage(ref);
+}
+
+void SceneTreeWidget::DeleteFromCache()
+{
+    if (!framework->Asset()->GetAssetCache())
+    {
+        LogError("Cannot delete asset from cache: Not running Tundra with an asset cache!");
+        return;
+    }
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+            framework->Asset()->GetAssetCache()->DeleteAsset(item->Asset()->Name());
+}
+
+void SceneTreeWidget::Forget()
+{
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+            framework->Asset()->ForgetAsset(item->Asset(), false);
+}
+
+void SceneTreeWidget::ReloadFromSource()
+{
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+        {
+            QString assetRef = item->Asset()->Name();
+            // Make a 'forced request' of the existing asset. This will cause a full re-download of the asset
+            // and the newly downloaded data will be deserialized to the existing asset object.
+            framework->Asset()->RequestAsset(assetRef, item->Asset()->Type(), true);
+        }
+}
+
+void SceneTreeWidget::ReloadFromCache()
+{
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+            item->Asset()->LoadFromCache();
+}
+
+void SceneTreeWidget::Unload()
+{
+    foreach(AssetItem *item, SelectedItems().assets)
+        if (item->Asset())
+            item->Asset()->Unload();
+}
+
+void SceneTreeWidget::OpenFileLocation()
+{
+    QList<AssetItem *> selection = SelectedItems().assets;
+    if (selection.isEmpty() || selection.size() < 1)
+        return;
+
+    AssetItem *item = selection.first();
+    if (item->Asset() && !item->Asset()->DiskSource().isEmpty())
+    {
+        bool success = false;
+#ifdef _WINDOWS
+        // Custom code for Windows, as we want to use explorer.exe with the /select switch.
+        // Craft command line string, use the full filename, not directory.
+        QString path = QDir::toNativeSeparators(item->Asset()->DiskSource());
+        WCHAR commandLineStr[256] = {};
+        WCHAR wcharPath[256] = {};
+        mbstowcs(wcharPath, path.toStdString().c_str(), 254);
+        wsprintf(commandLineStr, L"explorer.exe /select,%s", wcharPath);
+
+        STARTUPINFO startupInfo;
+        memset(&startupInfo, 0, sizeof(STARTUPINFO));
+        startupInfo.cb = sizeof(STARTUPINFO);
+        PROCESS_INFORMATION processInfo;
+        memset(&processInfo, 0, sizeof(PROCESS_INFORMATION));
+        success = CreateProcessW(NULL, commandLineStr, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS,
+            NULL, NULL, &startupInfo, &processInfo);
+
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(processInfo.hThread);
+#else
+        QString path = QDir::toNativeSeparators(QFileInfo(item->Asset()->DiskSource()).dir().path());
+        success = QDesktopServices::openUrl(QUrl("file:///" + path, QUrl::TolerantMode));
+#endif
+        if (!success)
+            LogError("AssetTreeWidget::OpenFileLocation: failed to open " + path);
+    }
+}
+
+void SceneTreeWidget::OpenInExternalEditor()
+{
+    QList<AssetItem *> selection = SelectedItems().assets;
+    if (selection.isEmpty() || selection.size() < 1)
+        return;
+
+    AssetItem *item = selection.first();
+    if (item->Asset() && !item->Asset()->DiskSource().isEmpty())
+        if (!QDesktopServices::openUrl(QUrl("file:///" + item->Asset()->DiskSource(), QUrl::TolerantMode)))
+            LogError("AssetTreeWidget::OpenInExternalEditor: failed to open " + item->Asset()->DiskSource());
+}
+
+void SceneTreeWidget::CopyAssetRef()
+{
+    QList<AssetItem *> sel = SelectedItems().assets;
+    if (sel.size() == 1 && sel.first()->Asset())
+        QApplication::clipboard()->setText(sel.first()->Asset()->Name());
+}
+
+void SceneTreeWidget::Clone()
+{
+    QList<AssetItem *> sel = SelectedItems().assets;
+    if (sel.isEmpty())
+        return;
+
+    CloneAssetDialog *dialog = new CloneAssetDialog(sel.first()->Asset(), framework->Asset(), this);
+    connect(dialog, SIGNAL(finished(int)), SLOT(CloneAssetDialogClosed(int)));
+    dialog->show();
+}
+
+void SceneTreeWidget::Export()
+{
+    QList<AssetItem *> sel = SelectedItems().assets;
+    if (sel.isEmpty())
+        return;
+
+    if (sel.size() == 1)
+    {
+        QString ref = sel.first()->Asset() ? sel.first()->Asset()->Name() : "";
+        QString assetName= AssetAPI::ExtractFilenameFromAssetRef(ref);
+        QtUtils::SaveFileDialogNonModal("", tr("Save Asset As"), assetName, 0, this, SLOT(SaveAssetDialogClosed(int)));
+    }
+    else
+    {
+        QtUtils::DirectoryDialogNonModal(tr("Select Directory"), "", 0, this, SLOT(SaveAssetDialogClosed(int)));
+    }
+}
+
+void SceneTreeWidget::RequestNewAsset()
+{
+    RequestNewAssetDialog *dialog = new RequestNewAssetDialog(framework->Asset(), this);
+    connect(dialog, SIGNAL(finished(int)), SLOT(RequestNewAssetDialogClosed(int)));
+    dialog->show();
+}
+
+void SceneTreeWidget::CreateAsset()
+{
+    QAction *action = qobject_cast<QAction *>(sender());
+    assert(action);
+    if (!action)
+        return;
+    QString assetType = action->objectName();
+    QString assetName = framework->Asset()->GenerateUniqueAssetName(assetType, tr("New"));
+    framework->Asset()->CreateNewAsset(assetType, assetName);
+}
+
+void SceneTreeWidget::MakeDefaultStorage()
+{
+    AssetTreeWidgetSelection sel = SelectedItems();
+    if (sel.storages.size() == 1)
+    {
+        framework->Asset()->SetDefaultAssetStorage(sel.storages.first()->Storage());
+        //QString storageName = selected.first()->data(0, Qt::UserRole).toString();
+        //framework->Asset()->SetDefaultAssetStorage(framework->Asset()->GetAssetStorageByName(storageName));
+    }
+
+    AssetsWindow *parent = dynamic_cast<AssetsWindow*>(parentWidget());
+    if (parent)
+        parent->PopulateTreeWidget();
+}
+
+void SceneTreeWidget::RemoveStorage()
+{
+    foreach(AssetStorageItem *item, SelectedItems().storages)
+    {
+        //QString storageName = item->data(0, Qt::UserRole).toString();
+        //framework->Asset()->RemoveAssetStorage(storageName);
+        if (item->Storage())
+            framework->Asset()->RemoveAssetStorage(item->Storage()->Name());
+    }
+
+    AssetsWindow *parent = dynamic_cast<AssetsWindow*>(parentWidget());
+    if (parent)
+        parent->PopulateTreeWidget();
 }
